@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=70", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ai-powered-music"
+version = "2.0.0"
+description = "FastAPI backend for AI-Powered-Music"
+authors = [{ name = "Rik", email = "rikardo.re@gmail.com" }]
+readme = "../README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "yt-dlp>=2026.01.01",
+    "click>=8.1.7",
+    "mutagen",
+    "flask>=3.1.0",
+    "flask-login>=0.6.3",
+    "flask-cors>=4.0.0",
+    "gunicorn>=23.0.0",
+    "python-dotenv>=1.0.0",
+    "werkzeug>=3.1.0",
+]
+
+[tool.black]
+line-length = 120
+target-version = ["py313"]
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git | \.venv | __pycache__ | build | dist
+)/
+'''
+
+[tool.isort]
+line_length = 120
+profile = "black"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v"
+markers = [
+    "slow: marks tests that require optional heavy dependencies or audio files",
+]
+
+[tool.flake8]
+max-line-length = 120
+extend-ignore = ["E203", "W503"]

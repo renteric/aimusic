@@ -1,0 +1,130 @@
+##
+## docker-compose.yml - AI-Music
+##
+## Services:
+##   backend    — FastAPI REST API (Uvicorn, port 5000 internal)
+##   frontend   — Vue.js SPA served by nginx (port APP_PORT, default 80)
+##   separator  — Stem extraction microservice (FastAPI + ML, port 8000 internal only)
+##   transcribe — Whisper transcription service (optional, comment out if unused)
+##
+
+services:
+  # ── FastAPI backend ──────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: music-backend
+    image: ai-powered-music-backend:latest
+    env_file: .env
+    volumes:
+      # Media files live on the host — not baked into the image.
+      - ./media:/app/media
+      # SQLite database persisted on the host.
+      - ./data:/app/data
+      # User markdown documents persisted on the host.
+      - ./docs:/app/docs
+    ports:
+      - "5000:5000"
+    restart: unless-stopped
+    networks:
+      - app-net
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:5000/api/config')",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  # ── Vue.js frontend (nginx) ──────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: music-frontend
+    image: ai-powered-music-frontend:latest
+    ports:
+      - "${APP_PORT:-80}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - app-net
+
+  # ── Separator microservice ───────────────────────────────────────────────────
+  # Stem extraction (Demucs · LALAL.AI · AudioSep). Internal only — nginx does
+  # not expose this service; the backend API proxies to it via /api/stem/*.
+  # Outputs are written directly into media/stems/ (shared with backend).
+  separator:
+    build:
+      context: ./separator
+      dockerfile: Dockerfile
+    container_name: music-separator
+    image: ai-powered-music-separator:latest
+    env_file: .env
+    environment:
+      # Override separator paths to point into musicpro's shared volumes.
+      MUSEP_OUTPUTS_DIR: /app/outputs
+      MUSEP_UPLOADS_DIR: /app/uploads
+      MUSEP_MODELS_DIR: /app/models
+    volumes:
+      # Source code bind-mount — separator lives as a sibling directory.
+      - ./separator/src:/app/src:ro
+      # Stems output → shared with musicpro's media volume.
+      - ./media/stems:/app/outputs
+      # Persistent model weights cache.
+      - separator-models:/app/models
+    restart: unless-stopped
+    networks:
+      - app-net
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ── Whisper transcription service (optional) ─────────────────────────────────
+  # Comment out this entire block if you do not need transcription.
+  transcribe:
+    build:
+      context: ./transcribe
+      dockerfile: Dockerfile
+    image: ai-powered-music-transcribe:latest
+    container_name: music-transcribe
+    environment:
+      # Whisper model weights cache — must match the volume mount below.
+      WHISPER_CACHE_DIR: /app/.cache/whisper
+    volumes:
+      - ./media:/app/media
+      - whisper-cache:/app/.cache/whisper
+    restart: unless-stopped
+    networks:
+      - app-net
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:9000/health')",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+networks:
+  app-net:
+    driver: bridge
+
+volumes:
+  whisper-cache:
+  separator-models:

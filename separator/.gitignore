@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+venv/
+.env
+
+# Data directories
+uploads/
+outputs/
+models/
+
+# Docker
+*.log
+*.env
+
+# IDEs
+.vscode/
+.idea/

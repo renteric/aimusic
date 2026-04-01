@@ -1,0 +1,54 @@
+# Virtual environment - never copy into image
+.venv/
+venv/
+node_modules/
+
+# Frontend build output (built inside Docker)
+frontend/dist/
+frontend/node_modules/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pycache
+
+# Compiled extensions
+*.so
+
+# Test / coverage artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.tox/
+
+# Local env files (secrets)
+.env
+*.env.local
+
+# Editor / OS artifacts
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Claude
+.claude/
+CLAUDE.md
+
+# Downloaded media (mounted as volume at runtime)
+media/
+
+# Backup files from metadata_cleaner
+*.bak
+
+# Docs
+README.md

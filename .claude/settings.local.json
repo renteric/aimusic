@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(source backend/.venv/bin/activate)",
+      "Bash(make help:*)",
+      "Bash(make install-backend:*)",
+      "Bash(make install-frontend:*)",
+      "Bash(make test:*)",
+      "Bash(make lint:*)",
+      "Bash(make backend-dev:*)",
+      "Bash(make frontend-dev:*)",
+      "Bash(cd backend && .venv/bin/pytest:*)",
+      "Bash(cd backend && .venv/bin/flake8 app/:*)",
+      "Bash(cd frontend && npm run:*)"
+    ]
+  }
+}

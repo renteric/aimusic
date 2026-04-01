@@ -1,0 +1,20 @@
+# .flake8 — used by flake8 directly (no plugin needed)
+# Mirrors [tool.flake8] in pyproject.toml — keep them in sync.
+
+[flake8]
+max-line-length = 88
+extend-ignore =
+    E203,
+    W503,
+    E501,
+exclude =
+    .git,
+    __pycache__,
+    .venv,
+    venv,
+    *.egg-info,
+    uploads,
+    outputs,
+    models,
+per-file-ignores =
+    **/__init__.py:F401

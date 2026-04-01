@@ -1,0 +1,7 @@
+# Extra dependencies for the Whisper transcription container
+# Install with: pip install -r requirements.txt -r requirements.transcribe.txt
+openai-whisper
+torch
+fastapi>=0.115.0
+uvicorn[standard]>=0.34.0
+python-dotenv>=1.0.0

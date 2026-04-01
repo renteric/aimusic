@@ -1,0 +1,54 @@
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# ── Virtual environments ──────────────────────────────────────────────────────
+.venv/
+venv/
+env/
+
+# ── Environment / secrets ─────────────────────────────────────────────────────
+.env
+*.env.local
+*.env.*.local
+
+# ── Test / coverage ───────────────────────────────────────────────────────────
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.tox/
+.hypothesis/
+
+# ── Editor / OS ───────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ── Downloaded media ──────────────────────────────────────────────────────────
+media/
+
+# ── Backup files from metadata_cleaner ───────────────────────────────────────
+*.bak
+
+# ── yt-dlp cache ─────────────────────────────────────────────────────────────
+.cache/
+
+data/app.db
+frontend/node_modules
+node_modules
+docs/*
+separator/docs/*
+separator/models/*
+separator/outputs/*
+separator/uploads/*
+separator/files/*
