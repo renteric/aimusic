@@ -45,6 +45,33 @@ _MINOR_PROFILE = np.array([6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98,
 HARMONY_MODES: list[str] = ["diatonic", "fixed+3"]
 VALID_MODES: list[str] = ["major", "minor"]
 
+#: Smallest note duration used in MusicXML output.
+#: A 32nd note (1/8 of a quarter) is always representable in standard notation
+#: and remains valid after music21 splits notes at barlines.
+_MIN_QL: float = 0.125  # 32nd note
+
+#: Quantisation step for MusicXML durations — round to nearest 32nd note so
+#: floating-point quarter-lengths never produce unmappable fractions.
+_QL_STEP: float = 0.03125  # 128th note grid
+
+
+def _quantise_ql(ql: float) -> float:
+    """Round *ql* to the nearest 128th-note grid and enforce a 32nd-note minimum.
+
+    music21's ``makeNotation()`` splits notes at barlines.  When the input
+    quarter-length is an arbitrary float the split produces irrational
+    fractions (e.g. 2048th notes) that MusicXML cannot represent.  Snapping
+    to a 128th-note grid (``_QL_STEP = 1/32``) guarantees every sub-note
+    after splitting is a standard duration.
+
+    Args:
+        ql: Raw quarter-length value (any positive float).
+
+    Returns:
+        Quantised quarter-length ≥ :data:`_MIN_QL`.
+    """
+    return max(_MIN_QL, round(ql / _QL_STEP) * _QL_STEP)
+
 
 # ── Data classes ──────────────────────────────────────────────────────────────
 
@@ -482,10 +509,10 @@ class MelodyExtractor:
             for onset, dur, pitch in notes:
                 onset_q = onset / quarter_dur
                 gap_q = onset_q - last_time_q
-                if gap_q > 0.125:
-                    part.append(m21note.Rest(quarterLength=gap_q))
+                if gap_q >= _MIN_QL:
+                    part.append(m21note.Rest(quarterLength=_quantise_ql(gap_q)))
                 n = m21note.Note(pitch)
-                n.quarterLength = max(0.125, dur / quarter_dur)
+                n.quarterLength = _quantise_ql(dur / quarter_dur)
                 part.append(n)
                 last_time_q = onset_q + n.quarterLength
 
@@ -496,13 +523,14 @@ class MelodyExtractor:
         # Build harmony by mirroring melody structure
         part_harm = _make_part(instrument.PanFlute(), with_notes=False)
         for n in part_mel.recurse().notesAndRests:
+            ql = _quantise_ql(n.quarterLength)
             if isinstance(n, m21note.Note):
                 hp = diatonic_third_above(n.pitch.midi, key_str, mode)
                 hn = m21note.Note(hp)
-                hn.quarterLength = n.quarterLength
+                hn.quarterLength = ql
                 part_harm.append(hn)
             else:
-                part_harm.append(m21note.Rest(quarterLength=n.quarterLength))
+                part_harm.append(m21note.Rest(quarterLength=ql))
 
         sc.append(part_mel)
         sc.append(part_harm)

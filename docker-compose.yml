@@ -63,9 +63,9 @@ services:
   # not expose this service; the backend API proxies to it via /api/stem/*.
   # Outputs are written directly into media/stems/ (shared with backend).
   separator:
-    build:
-      context: ./separator
-      dockerfile: Dockerfile
+    # build:
+    #   context: ./separator
+    #   dockerfile: Dockerfile
     container_name: music-separator
     image: ai-powered-music-separator:latest
     env_file: .env
@@ -94,9 +94,9 @@ services:
   # ── Whisper transcription service (optional) ─────────────────────────────────
   # Comment out this entire block if you do not need transcription.
   transcribe:
-    build:
-      context: ./transcribe
-      dockerfile: Dockerfile
+    # build:
+    #   context: ./transcribe
+    #   dockerfile: Dockerfile
     image: ai-powered-music-transcribe:latest
     container_name: music-transcribe
     environment:

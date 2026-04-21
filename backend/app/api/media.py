@@ -10,6 +10,7 @@ Routes registered under the ``/api/media`` prefix:
     POST /api/media/clean           — run the metadata cleaner (JSON body)
     GET  /api/media/read/<path>     — return raw text of a .md file (JSON)
     POST /api/media/transcribe      — transcribe audio via Whisper (JSON body)
+    GET  /api/media/storage         — storage usage breakdown by format and folder
 """
 
 import json
@@ -328,3 +329,66 @@ def transcribe_audio(
         raise HTTPException(503, f"Transcribe service unavailable: {exc.reason}")
     except Exception as exc:
         raise HTTPException(500, str(exc))
+
+
+@router.get("/storage")
+def storage_stats(
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """Return storage usage breakdown for the media directory.
+
+    Scans ``MEDIA_DIR`` recursively and aggregates file counts and sizes by
+    file extension and by top-level folder.  Hidden files and directories
+    (names starting with ``.``) are skipped.
+
+    Args:
+        current_user: Resolved by :func:`get_current_user`.
+
+    Returns:
+        Dict with keys:
+        - ``total_bytes`` — total size in bytes
+        - ``total_files`` — total number of files
+        - ``by_format``   — list of ``{ext, count, bytes}`` dicts, sorted by size desc
+        - ``by_folder``   — list of ``{folder, count, bytes}`` dicts, sorted by size desc
+    """
+    media_dir = AppConfig.MEDIA_DIR
+    by_format: dict[str, dict] = {}
+    by_folder: dict[str, dict] = {}
+    total_bytes = 0
+    total_files = 0
+
+    for path in media_dir.rglob("*"):
+        if not path.is_file():
+            continue
+        # Skip hidden files.
+        if any(part.startswith(".") for part in path.parts):
+            continue
+
+        size = path.stat().st_size
+        total_bytes += size
+        total_files += 1
+
+        # By extension.
+        ext = path.suffix.lower() or "(no ext)"
+        if ext not in by_format:
+            by_format[ext] = {"ext": ext, "count": 0, "bytes": 0}
+        by_format[ext]["count"] += 1
+        by_format[ext]["bytes"] += size
+
+        # By top-level folder (relative to MEDIA_DIR).
+        try:
+            rel = path.relative_to(media_dir)
+        except ValueError:
+            continue
+        folder = rel.parts[0] if len(rel.parts) > 1 else "(root)"
+        if folder not in by_folder:
+            by_folder[folder] = {"folder": folder, "count": 0, "bytes": 0}
+        by_folder[folder]["count"] += 1
+        by_folder[folder]["bytes"] += size
+
+    return {
+        "total_bytes": total_bytes,
+        "total_files": total_files,
+        "by_format": sorted(by_format.values(), key=lambda x: x["bytes"], reverse=True),
+        "by_folder": sorted(by_folder.values(), key=lambda x: x["bytes"], reverse=True),
+    }

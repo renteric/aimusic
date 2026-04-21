@@ -33,6 +33,7 @@ class AppConfig:
         ADMIN_USERNAME: Login name for the auto-created admin account.
         ADMIN_PASSWORD: Password for the auto-created admin account.
         ACCESS_TOKEN_EXPIRE_MINUTES: JWT token lifetime in minutes.
+        ANTHROPIC_API_KEY: Anthropic API key for Claude AI features (empty disables them).
     """
 
     HOST: str = os.getenv("API_HOST", "0.0.0.0")
@@ -73,3 +74,6 @@ class AppConfig:
     ADMIN_PASSWORD: str = os.getenv("ADMIN_PASSWORD", "")
 
     ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "1440"))
+
+    #: Anthropic API key — required for /api/ai/* endpoints.  Empty string disables AI features.
+    ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "")

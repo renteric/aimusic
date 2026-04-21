@@ -19,13 +19,20 @@ Routes registered under the ``/api/stem`` prefix:
     DELETE /api/stem/jobs/{job_id}            — delete a job and its files
     GET  /api/stem/library                    — list stem output folders
     DELETE /api/stem/library/{folder}         — delete an output folder
+    POST /api/stem/bounce                     — mix stems at given volumes → new MP3
 """
 
 import io
+import re
+import shutil
+import subprocess
+import tempfile
+from pathlib import Path
 
 import httpx
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
+from pydantic import BaseModel
 
 from ..core.config import AppConfig
 from ..core.roles import require_roles
@@ -444,3 +451,155 @@ async def stem_delete_folder(folder_name: str, current_user: User = _admin_dep) 
         return {"message": f"Folder '{folder_name}' deleted."}
     except OSError as exc:
         raise HTTPException(500, f"Failed to delete folder: {exc}")
+
+
+# ── Bounce / export ───────────────────────────────────────────────────────────
+
+
+class BounceBody(BaseModel):
+    """Request body for POST /api/stem/bounce."""
+
+    folder: str
+    """Stem library folder name (inside ``media/stems/``)."""
+
+    volumes: dict[str, float]
+    """Mapping of stem filename (e.g. ``vocals.mp3``) to linear volume 0.0–1.0.
+    Omit a stem or set its volume to 0.0 to exclude it from the mix."""
+
+    output_name: str = ""
+    """Optional output filename (without extension).  Defaults to
+    ``<folder>_bounce``."""
+
+    format: str = "mp3"
+    """Output audio format: ``mp3``, ``flac``, ``wav``, ``ogg``, or ``opus``."""
+
+    bitrate: str = "320k"
+    """Bitrate for lossy formats (e.g. ``"192k"``, ``"320k"``).
+    Ignored for lossless formats (``flac``, ``wav``)."""
+
+
+@router.post("/bounce")
+async def bounce_stems(
+    body: BounceBody,
+    current_user: User = _admin_dep,
+) -> dict:
+    """Mix stem files at the given volumes and export a new MP3.
+
+    Uses ``ffmpeg``'s ``amix`` + ``volume`` filters to blend each stem at the
+    requested level, then writes the result to ``media/`` as a new MP3 file.
+    Stems with volume ``0.0`` (or absent from *volumes*) are excluded from the
+    mix entirely.
+
+    Args:
+        body: JSON body with ``folder``, ``volumes`` mapping, optional
+              ``output_name``, and ``bitrate``.
+        current_user: Resolved by the admin role dependency.
+
+    Returns:
+        ``{"success": True, "path": str, "filename": str}`` where ``path``
+        is the rel_path inside MEDIA_DIR for the new file.
+
+    Raises:
+        HTTPException: 400 if no active stems, 404 if folder not found,
+            500 on ffmpeg failure.
+    """
+    # Validate folder name — no path traversal.
+    if not re.match(r"^[\w\-. ]+$", body.folder):
+        raise HTTPException(400, "Invalid folder name.")
+
+    stems_dir = AppConfig.STEMS_DIR
+    folder_path = stems_dir / body.folder
+    try:
+        folder_path.resolve().relative_to(stems_dir.resolve())
+    except ValueError:
+        raise HTTPException(404, "Folder not found.")
+
+    if not folder_path.is_dir():
+        raise HTTPException(404, f"Stem folder '{body.folder}' not found.")
+
+    # Collect stem files that have a non-zero volume.
+    audio_extensions = {".mp3", ".wav", ".flac"}
+    all_stems = [
+        p for p in sorted(folder_path.iterdir())
+        if p.is_file() and p.suffix.lower() in audio_extensions
+    ]
+    if not all_stems:
+        raise HTTPException(400, "No audio files found in this stem folder.")
+
+    active: list[tuple[Path, float]] = []
+    for stem_path in all_stems:
+        vol = body.volumes.get(stem_path.name, 1.0)
+        if vol > 0.0:
+            active.append((stem_path, min(vol, 2.0)))  # cap at 200 %
+
+    if not active:
+        raise HTTPException(400, "All stems are muted — nothing to bounce.")
+
+    # Sanitise output name.
+    raw_name = body.output_name.strip() or f"{body.folder}_bounce"
+    safe_name = re.sub(r"[^\w\s\-.]", "_", raw_name).strip()
+    if not safe_name:
+        safe_name = "bounce"
+
+    # Build ffmpeg command.
+    # Each active stem gets its own -i input and a volume filter.
+    # amix blends them; normalize=0 preserves the individual levels.
+    cmd: list[str] = ["ffmpeg", "-y"]
+    for stem_path, _ in active:
+        cmd += ["-i", str(stem_path)]
+
+    n = len(active)
+    if n == 1:
+        # Single stem — just apply volume directly, no amix needed.
+        stem_path, vol = active[0]
+        filter_graph = f"[0:a]volume={vol:.4f}[out]"
+        cmd += ["-filter_complex", filter_graph, "-map", "[out]"]
+    else:
+        # Build: [0:a]volume=V[a0]; [1:a]volume=V[a1]; ... ; [a0][a1]...amix=inputs=N:normalize=0[out]
+        vol_filters = ";".join(
+            f"[{i}:a]volume={vol:.4f}[a{i}]" for i, (_, vol) in enumerate(active)
+        )
+        mix_inputs = "".join(f"[a{i}]" for i in range(n))
+        filter_graph = f"{vol_filters};{mix_inputs}amix=inputs={n}:normalize=0[out]"
+        cmd += ["-filter_complex", filter_graph, "-map", "[out]"]
+
+    _FORMAT_SETTINGS: dict[str, dict] = {
+        "mp3":  {"codec": "libmp3lame", "ext": "mp3",  "lossy": True},
+        "flac": {"codec": "flac",       "ext": "flac", "lossy": False},
+        "wav":  {"codec": "pcm_s16le",  "ext": "wav",  "lossy": False},
+        "ogg":  {"codec": "libvorbis",  "ext": "ogg",  "lossy": True},
+        "opus": {"codec": "libopus",    "ext": "opus", "lossy": True},
+    }
+    fmt = body.format.lower() if body.format.lower() in _FORMAT_SETTINGS else "mp3"
+    fmt_cfg = _FORMAT_SETTINGS[fmt]
+
+    output_filename = f"{safe_name}.{fmt_cfg['ext']}"
+    output_path = AppConfig.MEDIA_DIR / output_filename
+
+    cmd += ["-codec:a", fmt_cfg["codec"]]
+    if fmt_cfg["lossy"]:
+        bitrate = body.bitrate if re.match(r"^\d+k$", body.bitrate) else "320k"
+        cmd += ["-b:a", bitrate]
+    cmd.append(str(output_path))
+
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+    except subprocess.TimeoutExpired:
+        raise HTTPException(500, "ffmpeg timed out during bounce.")
+    except FileNotFoundError:
+        raise HTTPException(500, "ffmpeg is not installed or not on PATH.")
+
+    if result.returncode != 0:
+        raise HTTPException(500, f"ffmpeg error: {result.stderr[-500:]}")
+
+    rel_path = output_path.relative_to(AppConfig.MEDIA_DIR).as_posix()
+    return {
+        "success": True,
+        "path": rel_path,
+        "filename": output_filename,
+    }

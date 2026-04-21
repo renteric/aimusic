@@ -51,16 +51,19 @@ audio.addEventListener('play', () => {
  */
 export function usePlayer() {
   /**
-   * Play or toggle a track by its stream URL.
+   * Start playing a track by its stream URL.
    *
-   * - If the given URL is already active, toggles play/pause.
-   * - Otherwise stops the current track and starts the new one.
+   * If the given URL is already loaded and playing, this is a no-op.
+   * To pause the active track call {@link pause} instead.
    *
    * @param url - Full URL to the audio stream (e.g. `/api/media/stream/...`).
    */
   function play(url: string): void {
     if (activeUrl.value === url) {
-      audio.paused ? audio.play().catch(() => {}) : audio.pause()
+      // Already loaded — resume if paused, otherwise do nothing.
+      if (audio.paused) {
+        audio.play().catch(() => { isPlaying.value = false })
+      }
       return
     }
 
@@ -72,6 +75,11 @@ export function usePlayer() {
     audio.play().catch(() => {
       isPlaying.value = false
     })
+  }
+
+  /** Pause the currently active track. */
+  function pause(): void {
+    audio.pause()
   }
 
   /** Stop playback and clear active state. */
@@ -89,6 +97,7 @@ export function usePlayer() {
     /** Playback progress 0–100. */
     progress: readonly(progress),
     play,
+    pause,
     stop,
   }
 }

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * MediaFilesView.vue - Media file browser with sort, play, delete, and metadata tools.
+ * MediaFilesView.vue - Media file browser with sort, play, delete, metadata tools, and AI panel.
  *
  * Fetches directory listings from /api/media/files/:path.
  * The current path is derived from the router params so deep-links work.
@@ -8,8 +8,8 @@
  */
 
 import { usePlayer } from '@/composables/usePlayer'
-import { mediaApi } from '@/services/api'
-import type { MediaEntry } from '@/services/types'
+import { aiApi, mediaApi } from '@/services/api'
+import type { AiTags, MediaEntry } from '@/services/types'
 import { useAuthStore } from '@/stores/auth'
 import { marked } from 'marked'
 import { computed, onMounted, ref, watch } from 'vue'
@@ -23,7 +23,7 @@ const { t } = useI18n()
 
 const route = useRoute()
 const router = useRouter()
-const { play, activeUrl, isPlaying, progress } = usePlayer()
+const { play, pause, activeUrl, isPlaying, progress } = usePlayer()
 
 // ── State ─────────────────────────────────────────────────────────────────────
 
@@ -59,6 +59,23 @@ const showMdModal = ref(false)
 // Delete
 const deleteRunning = ref(false)
 
+// AI panel
+const showAiPanel = ref(false)
+const aiEntry = ref<MediaEntry | null>(null)
+const aiRunning = ref(false)
+const aiResult = ref('')
+const aiResultHtml = computed(() => (aiResult.value ? (marked.parse(aiResult.value) as string) : ''))
+const aiTags = ref<AiTags | null>(null)
+const aiError = ref('')
+const aiSaved = ref('')
+const aiTranslateLang = ref('French')
+
+const AI_TRANSLATE_LANGUAGES = [
+  'French', 'Spanish', 'Portuguese', 'German', 'Italian',
+  'Dutch', 'Russian', 'Japanese', 'Chinese', 'Korean',
+  'Arabic', 'Hindi', 'Polish', 'Swedish', 'Turkish', 'English',
+] as const
+
 // ── Computed ──────────────────────────────────────────────────────────────────
 
 const sortedEntries = computed(() => {
@@ -80,6 +97,12 @@ const selectedCount = computed(() => selectedPaths.value.size)
 const allSelected = computed(
   () => entries.value.length > 0 && selectedCount.value === entries.value.length,
 )
+
+/** True when the AI panel entry is a .md transcript file. */
+const aiEntryIsTranscript = computed(() => aiEntry.value?.name.endsWith('.md') ?? false)
+
+/** True when the AI panel entry is an audio file. */
+const aiEntryIsAudio = computed(() => aiEntry.value?.mime.startsWith('audio/') ?? false)
 
 // ── Clean option labels ───────────────────────────────────────────────────────
 
@@ -248,6 +271,121 @@ function playEntry(entry: MediaEntry): void {
 
 function isActive(entry: MediaEntry): boolean {
   return activeUrl.value === mediaApi.streamUrl(entry.rel_path)
+}
+
+// ── Melody extraction ─────────────────────────────────────────────────────────
+
+function goToMelody(entry: MediaEntry): void {
+  router.push({ name: 'Melody', query: { path: entry.rel_path } })
+}
+
+// ── AI panel ─────────────────────────────────────────────────────────────────
+
+function openAiPanel(entry: MediaEntry): void {
+  aiEntry.value = entry
+  aiResult.value = ''
+  aiTags.value = null
+  aiError.value = ''
+  aiSaved.value = ''
+  showAiPanel.value = true
+}
+
+function closeAiPanel(): void {
+  showAiPanel.value = false
+  aiEntry.value = null
+  aiResult.value = ''
+  aiTags.value = null
+  aiError.value = ''
+  aiSaved.value = ''
+  aiTranslateLang.value = 'French'
+}
+
+async function runAiTags(save: boolean): Promise<void> {
+  if (!aiEntry.value) return
+  aiRunning.value = true
+  aiResult.value = ''
+  aiTags.value = null
+  aiError.value = ''
+  aiSaved.value = ''
+  try {
+    const { data } = await aiApi.tags(aiEntry.value.rel_path, save)
+    aiTags.value = data.tags
+    if (save && data.saved_path) {
+      aiSaved.value = t('ai.saved_ok', { path: data.saved_path })
+      await loadDirectory(currentReqPath())
+    }
+  } catch (err: unknown) {
+    const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+    aiError.value = msg ?? t('ai.error_generic')
+  } finally {
+    aiRunning.value = false
+  }
+}
+
+async function runAiCleanup(save: boolean): Promise<void> {
+  if (!aiEntry.value) return
+  aiRunning.value = true
+  aiResult.value = ''
+  aiTags.value = null
+  aiError.value = ''
+  aiSaved.value = ''
+  try {
+    const { data } = await aiApi.cleanup(aiEntry.value.rel_path, save)
+    aiResult.value = data.cleaned
+    if (save) {
+      aiSaved.value = t('ai.saved_ok', { path: aiEntry.value.rel_path })
+      await loadDirectory(currentReqPath())
+    }
+  } catch (err: unknown) {
+    const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+    aiError.value = msg ?? t('ai.error_generic')
+  } finally {
+    aiRunning.value = false
+  }
+}
+
+async function runAiTranslate(save: boolean): Promise<void> {
+  if (!aiEntry.value) return
+  aiRunning.value = true
+  aiResult.value = ''
+  aiTags.value = null
+  aiError.value = ''
+  aiSaved.value = ''
+  try {
+    const { data } = await aiApi.translate(aiEntry.value.rel_path, aiTranslateLang.value, save)
+    aiResult.value = data.translation
+    if (save && data.saved_path) {
+      aiSaved.value = t('ai.saved_ok', { path: data.saved_path })
+      await loadDirectory(currentReqPath())
+    }
+  } catch (err: unknown) {
+    const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+    aiError.value = msg ?? t('ai.error_generic')
+  } finally {
+    aiRunning.value = false
+  }
+}
+
+async function runAiAnalyse(save: boolean): Promise<void> {
+  if (!aiEntry.value) return
+  aiRunning.value = true
+  aiResult.value = ''
+  aiTags.value = null
+  aiError.value = ''
+  aiSaved.value = ''
+  try {
+    const { data } = await aiApi.analyse(aiEntry.value.rel_path, save)
+    aiResult.value = data.analysis
+    if (save && data.saved_path) {
+      aiSaved.value = t('ai.saved_ok', { path: data.saved_path })
+      await loadDirectory(currentReqPath())
+    }
+  } catch (err: unknown) {
+    const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+    aiError.value = msg ?? t('ai.error_generic')
+  } finally {
+    aiRunning.value = false
+  }
 }
 </script>
 
@@ -423,7 +561,7 @@ function isActive(entry: MediaEntry): boolean {
                       <button
                         class="btn btn-sm"
                         :class="isActive(entry) && isPlaying ? 'btn-success' : 'btn-outline-success'"
-                        @click="playEntry(entry)"
+                        @click="isActive(entry) && isPlaying ? pause() : playEntry(entry)"
                         title="Play / Pause"
                       >
                         <i :class="['bi', isActive(entry) && isPlaying ? 'bi-pause-fill' : 'bi-play-fill']"></i>
@@ -449,10 +587,30 @@ function isActive(entry: MediaEntry): boolean {
                       class="btn btn-sm btn-outline-info"
                       :disabled="transcribeRunning === entry.rel_path"
                       @click="handleTranscribe(entry)"
-                      title="Transcribe"
+                      :title="t('media.transcribe_title')"
                     >
                       <span v-if="transcribeRunning === entry.rel_path" class="spinner-border spinner-border-sm"></span>
                       <i v-else class="bi bi-mic"></i>
+                    </button>
+
+                    <!-- Extract Melody (audio only, hidden for viewer) -->
+                    <button
+                      v-if="entry.mime.startsWith('audio/') && !auth.isViewer"
+                      class="btn btn-sm btn-outline-primary"
+                      @click="goToMelody(entry)"
+                      :title="t('media.melody_title')"
+                    >
+                      <i class="bi bi-music-note-list"></i>
+                    </button>
+
+                    <!-- AI panel (audio + .md files, hidden for viewer) -->
+                    <button
+                      v-if="(entry.mime.startsWith('audio/') || entry.name.endsWith('.md')) && !auth.isViewer"
+                      class="btn btn-sm btn-outline-warning"
+                      @click="openAiPanel(entry)"
+                      :title="t('ai.btn_title')"
+                    >
+                      <i class="bi bi-stars"></i>
                     </button>
                   </div>
                   <span v-else class="text-muted">—</span>
@@ -507,6 +665,209 @@ function isActive(entry: MediaEntry): boolean {
           <span class="spinner-border spinner-border-sm me-2"></span>{{ t('common.loading') }}
         </div>
         <div v-else class="doc-preview" v-html="mdContent"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- AI panel modal -->
+  <div
+    v-if="showAiPanel && aiEntry"
+    class="modal-overlay md-viewer-overlay position-fixed top-0 start-0 w-100 h-100 d-flex align-items-start justify-content-center pt-5"
+    @click.self="closeAiPanel"
+  >
+    <div class="card border-0 shadow-lg md-viewer-card">
+      <!-- Header -->
+      <div class="card-header d-flex align-items-center justify-content-between py-2">
+        <strong class="small text-truncate me-3">
+          <i class="bi bi-stars text-warning me-1"></i>
+          {{ t('ai.panel_title') }} — {{ aiEntry.name }}
+        </strong>
+        <button class="btn btn-sm btn-outline-secondary" @click="closeAiPanel">
+          {{ t('common.close') }}
+        </button>
+      </div>
+
+      <!-- Action buttons -->
+      <div class="card-body border-bottom pb-3">
+        <div class="d-flex flex-wrap gap-2">
+          <!-- Clean Transcript — only for .md files -->
+          <template v-if="aiEntryIsTranscript">
+            <button
+              class="btn btn-sm btn-outline-primary"
+              :disabled="aiRunning"
+              @click="runAiCleanup(false)"
+            >
+              <span v-if="aiRunning" class="spinner-border spinner-border-sm me-1"></span>
+              <i v-else class="bi bi-magic me-1"></i>
+              {{ t('ai.cleanup_btn') }}
+            </button>
+            <button
+              class="btn btn-sm btn-primary"
+              :disabled="aiRunning"
+              @click="runAiCleanup(true)"
+            >
+              <span v-if="aiRunning" class="spinner-border spinner-border-sm me-1"></span>
+              <i v-else class="bi bi-magic me-1"></i>
+              {{ t('ai.cleanup_save_btn') }}
+            </button>
+          </template>
+
+          <!-- Analyse Song — audio files + .md files -->
+          <button
+            class="btn btn-sm btn-outline-warning"
+            :disabled="aiRunning"
+            @click="runAiAnalyse(false)"
+          >
+            <span v-if="aiRunning" class="spinner-border spinner-border-sm me-1"></span>
+            <i v-else class="bi bi-bar-chart-line me-1"></i>
+            {{ t('ai.analyse_btn') }}
+          </button>
+          <button
+            class="btn btn-sm btn-warning"
+            :disabled="aiRunning"
+            @click="runAiAnalyse(true)"
+          >
+            <span v-if="aiRunning" class="spinner-border spinner-border-sm me-1"></span>
+            <i v-else class="bi bi-bar-chart-line me-1"></i>
+            {{ t('ai.analyse_save_btn') }}
+          </button>
+
+          <!-- Divider -->
+          <div class="vr mx-1"></div>
+
+          <!-- Generate Tags — audio files + .md files -->
+          <button
+            class="btn btn-sm btn-outline-success"
+            :disabled="aiRunning"
+            @click="runAiTags(false)"
+          >
+            <span v-if="aiRunning" class="spinner-border spinner-border-sm me-1"></span>
+            <i v-else class="bi bi-tags me-1"></i>
+            {{ t('ai.tags_btn') }}
+          </button>
+          <button
+            class="btn btn-sm btn-success"
+            :disabled="aiRunning"
+            @click="runAiTags(true)"
+          >
+            <span v-if="aiRunning" class="spinner-border spinner-border-sm me-1"></span>
+            <i v-else class="bi bi-tags me-1"></i>
+            {{ t('ai.tags_save_btn') }}
+          </button>
+        </div>
+
+        <!-- Translate row (audio + .md files — needs transcript) -->
+        <div class="d-flex flex-wrap align-items-center gap-2 mt-2 pt-2 border-top">
+          <label class="small fw-semibold text-muted mb-0">
+            <i class="bi bi-translate me-1"></i>{{ t('ai.translate_lang_label') }}
+          </label>
+          <select
+            v-model="aiTranslateLang"
+            class="form-select form-select-sm ai-lang-select"
+            :disabled="aiRunning"
+          >
+            <option v-for="lang in AI_TRANSLATE_LANGUAGES" :key="lang" :value="lang">{{ lang }}</option>
+          </select>
+          <button
+            class="btn btn-sm btn-outline-secondary"
+            :disabled="aiRunning"
+            @click="runAiTranslate(false)"
+          >
+            <span v-if="aiRunning" class="spinner-border spinner-border-sm me-1"></span>
+            <i v-else class="bi bi-translate me-1"></i>
+            {{ t('ai.translate_btn') }}
+          </button>
+          <button
+            class="btn btn-sm btn-secondary"
+            :disabled="aiRunning"
+            @click="runAiTranslate(true)"
+          >
+            <span v-if="aiRunning" class="spinner-border spinner-border-sm me-1"></span>
+            <i v-else class="bi bi-translate me-1"></i>
+            {{ t('ai.translate_save_btn') }}
+          </button>
+        </div>
+
+        <!-- Running state hint -->
+        <p v-if="aiRunning" class="text-muted small mt-2 mb-0">
+          <span class="spinner-border spinner-border-sm me-1"></span>{{ t('ai.running') }}
+        </p>
+
+        <!-- Error -->
+        <div v-if="aiError" class="alert alert-danger mt-3 mb-0 py-2 small">
+          <i class="bi bi-exclamation-circle me-1"></i>{{ aiError }}
+        </div>
+
+        <!-- Saved confirmation -->
+        <div v-if="aiSaved" class="alert alert-success mt-3 mb-0 py-2 small">
+          <i class="bi bi-check-circle me-1"></i>{{ aiSaved }}
+        </div>
+      </div>
+
+      <!-- Result -->
+      <div class="card-body overflow-auto md-viewer-body">
+        <!-- Empty state -->
+        <div v-if="!aiResult && !aiTags && !aiRunning && !aiError" class="text-muted text-center py-4 small">
+          {{ t('ai.result_placeholder') }}
+        </div>
+
+        <!-- Markdown result (cleanup / analyse) -->
+        <div v-else-if="aiResult" class="doc-preview" v-html="aiResultHtml"></div>
+
+        <!-- Structured tags result -->
+        <div v-else-if="aiTags" class="ai-tags-result">
+          <!-- Language + Energy + Tempo pills -->
+          <div class="d-flex flex-wrap gap-2 mb-3">
+            <span class="badge bg-secondary">
+              <i class="bi bi-translate me-1"></i>{{ aiTags.language }}
+            </span>
+            <span
+              class="badge"
+              :class="{
+                'bg-success': aiTags.energy === 'low',
+                'bg-warning text-dark': aiTags.energy === 'medium',
+                'bg-danger': aiTags.energy === 'high',
+              }"
+            >
+              <i class="bi bi-lightning-charge me-1"></i>{{ t('ai.energy_label') }}: {{ aiTags.energy }}
+            </span>
+            <span class="badge bg-secondary">
+              <i class="bi bi-speedometer2 me-1"></i>{{ t('ai.tempo_label') }}: {{ aiTags.tempo }}
+            </span>
+          </div>
+
+          <!-- Genre -->
+          <div class="mb-2">
+            <span class="small fw-semibold text-muted me-2">{{ t('ai.genre_label') }}</span>
+            <span v-for="g in aiTags.genre" :key="g" class="badge bg-primary me-1">{{ g }}</span>
+          </div>
+
+          <!-- Mood -->
+          <div class="mb-2">
+            <span class="small fw-semibold text-muted me-2">{{ t('ai.mood_label') }}</span>
+            <span v-for="m in aiTags.mood" :key="m" class="badge bg-info text-dark me-1">{{ m }}</span>
+          </div>
+
+          <!-- Themes -->
+          <div class="mb-2">
+            <span class="small fw-semibold text-muted me-2">{{ t('ai.themes_label') }}</span>
+            <span v-for="th in aiTags.themes" :key="th" class="badge bg-warning text-dark me-1">{{ th }}</span>
+          </div>
+
+          <!-- Instruments -->
+          <div class="mb-3">
+            <span class="small fw-semibold text-muted me-2">{{ t('ai.instruments_label') }}</span>
+            <span v-for="ins in aiTags.instruments" :key="ins" class="badge bg-dark me-1">{{ ins }}</span>
+          </div>
+
+          <!-- All tags -->
+          <div class="border-top pt-3">
+            <p class="small fw-semibold text-muted mb-2">{{ t('ai.tags_all_label') }}</p>
+            <div class="d-flex flex-wrap gap-1">
+              <span v-for="tag in aiTags.tags" :key="tag" class="badge bg-light text-dark border">{{ tag }}</span>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>

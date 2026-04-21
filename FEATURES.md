@@ -149,16 +149,16 @@ Extend the existing Stem Player:
 
 ## 4. Recommended Priority
 
-| Priority | Feature | Effort | Value |
-|---|---|---|---|
-| ⭐⭐⭐ | Transcription cleanup + Song analysis (Claude API) | Low | Very High |
-| ⭐⭐⭐ | Auto-tag generator (Claude API) | Low | High |
-| ⭐⭐ | Melody extraction UI | Low | High — CLI already done |
-| ⭐⭐ | Lyric translation (Claude API) | Low | High |
-| ⭐⭐ | Auto-transcribe / auto-stem on download | Medium | High |
-| ⭐ | Stem bouncer / export | Medium | Medium |
-| ⭐ | Download queue manager | Medium | Medium |
-| ⭐ | Storage dashboard | Low | Medium |
+| Priority | Feature | Effort | Value | Status |
+| --- | --- | --- | --- | --- |
+| ⭐⭐⭐ | Transcription cleanup + Song analysis (Claude API) | Low | Very High | ✅ Done |
+| ⭐⭐⭐ | Auto-tag generator (Claude API) | Low | High | ✅ Done |
+| ⭐⭐ | Melody extraction UI | Low | High — CLI already done | ✅ Done |
+| ⭐⭐ | Lyric translation (Claude API) | Low | High | ✅ Done |
+| ⭐⭐ | Auto-transcribe / auto-stem on download | Medium | High | ✅ Done |
+| ⭐ | Stem bouncer / export | Medium | Medium | ✅ Done |
+| ⭐ | Download queue manager | Medium | Medium | ✅ Done |
+| ⭐ | Storage dashboard | Low | Medium | ✅ Done |
 
 ---
 

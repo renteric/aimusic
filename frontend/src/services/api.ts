@@ -11,7 +11,15 @@ import type {
   AdminDeleteResponse,
   AdminUserResponse,
   AdminUsersResponse,
+  AiAnalyseResponse,
+  AiCleanupResponse,
+  AiTagsResponse,
+  AiTranslateResponse,
   AppConfig,
+  DownloadJobSummary,
+  StorageStats,
+  MelodyExtractResponse,
+  MelodyJob,
   CleanResponse,
   DeleteResponse,
   DocsDeleteResponse,
@@ -84,6 +92,22 @@ export const fetchConfig = () => http.get<AppConfig>('/config')
 export const startDownload = (payload: DownloadPayload) =>
   http.post<DownloadResponse>('/download', payload)
 
+/** List all in-memory download jobs (newest first). */
+export const listDownloadJobs = () =>
+  http.get<DownloadJobSummary[]>('/download/jobs')
+
+/** Remove a completed download job record. */
+export const removeDownloadJob = (jobId: string) =>
+  http.delete<{ success: boolean }>(`/download/jobs/${jobId}`)
+
+/** Cancel a running download job. */
+export const cancelDownloadJob = (jobId: string) =>
+  http.post<{ success: boolean }>(`/download/jobs/${jobId}/cancel`, {})
+
+/** Fetch media storage usage statistics. */
+export const fetchStorageStats = () =>
+  http.get<StorageStats>('/media/storage')
+
 // ── Media ─────────────────────────────────────────────────────────────────────
 
 export const mediaApi = {
@@ -143,6 +167,8 @@ export const adminApi = {
 // ── Stem Extraction ───────────────────────────────────────────────────────────
 
 import type {
+  StemBounceRequest,
+  StemBounceResponse,
   StemFolderResponse,
   StemHealthResponse,
   StemJob,
@@ -218,6 +244,98 @@ export const stemApi = {
 
   /** Build the URL to download all stems as ZIP. */
   downloadAllUrl: (jobId: string) => `/api/stem/download/${jobId}`,
+
+  /** Mix stems at given volumes and export a new MP3. */
+  bounce: (payload: StemBounceRequest) =>
+    http.post<StemBounceResponse>('/stem/bounce', payload),
+}
+
+// ── Melody Extraction ─────────────────────────────────────────────────────────
+
+export const melodyApi = {
+  /**
+   * Start a melody extraction job.
+   * @param path      rel_path to an audio file inside the media directory.
+   * @param options   Optional overrides for fmin/fmax/bpm/key/mode/harmony/hpss.
+   */
+  extract: (
+    path: string,
+    options: {
+      fmin?: string
+      fmax?: string
+      min_note_ms?: number
+      use_hpss?: boolean
+      bpm?: number | null
+      key?: string | null
+      mode?: string | null
+      harmony_mode?: string
+    } = {},
+  ) => http.post<MelodyExtractResponse>('/melody/extract', { path, ...options }),
+
+  /** Poll a job by ID. */
+  getJob: (jobId: string) => http.get<MelodyJob>(`/melody/jobs/${jobId}`),
+
+  /** List all recent jobs (newest first). */
+  listJobs: () => http.get<MelodyJob[]>('/melody/jobs'),
+
+  /** Delete a job and its output files. */
+  deleteJob: (jobId: string) => http.delete<{ success: boolean }>(`/melody/jobs/${jobId}`),
+
+  /** Build the URL to download a specific output file. */
+  downloadUrl: (jobId: string, filename: string) =>
+    `/api/melody/download/${jobId}/${filename}`,
+
+  /** Build the URL to download all output files as a ZIP archive. */
+  downloadAllUrl: (jobId: string) => `/api/melody/download/${jobId}`,
+
+  /** Copy all output files to the source audio's media directory. */
+  saveAll: (jobId: string) =>
+    http.post<{ saved: string[] }>(`/melody/jobs/${jobId}/save`),
+
+  /** Copy one output file to the source audio's media directory. */
+  saveFile: (jobId: string, filename: string) =>
+    http.post<{ saved: string; filename: string }>(`/melody/jobs/${jobId}/save/${filename}`),
+}
+
+// ── AI Intelligence Layer ─────────────────────────────────────────────────────
+
+export const aiApi = {
+  /**
+   * Clean and correct a raw Whisper transcript.
+   * @param path  rel_path to a .md transcript file inside the media directory.
+   * @param save  When true, the cleaned text overwrites the source file.
+   */
+  cleanup: (path: string, save = false) =>
+    http.post<AiCleanupResponse>('/ai/cleanup', { path, save }),
+
+  /**
+   * Analyse a song's structure, themes, and lyrical devices.
+   * @param path  rel_path to an audio file or its .md transcript.
+   * @param save  When true, the analysis is saved as a sibling .analysis.md file.
+   */
+  analyse: (path: string, save = false) =>
+    http.post<AiAnalyseResponse>('/ai/analyse', { path, save }),
+
+  /**
+   * Generate structured genre/mood/energy/tags for a media file.
+   * @param path  rel_path to an audio file or its .md transcript.
+   * @param save  When true, tags are saved as a sibling .tags.json file.
+   */
+  tags: (path: string, save = false) =>
+    http.post<AiTagsResponse>('/ai/tags', { path, save }),
+
+  /**
+   * Translate song lyrics to a target language.
+   * @param path            rel_path to an audio file or its .md transcript.
+   * @param targetLanguage  Full language name in English (e.g. "French").
+   * @param save            When true, saves a sibling .<lang>.translation.md file.
+   */
+  translate: (path: string, targetLanguage: string, save = false) =>
+    http.post<AiTranslateResponse>('/ai/translate', {
+      path,
+      target_language: targetLanguage,
+      save,
+    }),
 }
 
 // ── Docs ──────────────────────────────────────────────────────────────────────

@@ -15,6 +15,16 @@ import { useRoute, useRouter } from 'vue-router'
 import { stemApi } from '@/services/api'
 import type { StemFile } from '@/services/types'
 
+const BOUNCE_BITRATES = ['128k', '192k', '256k', '320k'] as const
+
+const BOUNCE_FORMATS = [
+  { value: 'mp3',  label: 'MP3',  lossy: true },
+  { value: 'flac', label: 'FLAC — lossless', lossy: false },
+  { value: 'wav',  label: 'WAV — lossless', lossy: false },
+  { value: 'ogg',  label: 'OGG Vorbis', lossy: true },
+  { value: 'opus', label: 'Opus', lossy: true },
+] as const
+
 // ── Route ─────────────────────────────────────────────────────────────────────
 
 const route = useRoute()
@@ -299,6 +309,48 @@ function downloadUrl(relPath: string): string {
 const displayName = computed(() =>
   folderName.value.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
 )
+
+// ── Bounce ─────────────────────────────────────────────────────────────────────
+
+const bounceName = ref('')
+const bounceFormat = ref('mp3')
+const bounceBitrate = ref('320k')
+const bouncing = ref(false)
+const bounceResult = ref('')
+const bounceError = ref('')
+
+const bounceFormatLossy = computed(() =>
+  BOUNCE_FORMATS.find((f) => f.value === bounceFormat.value)?.lossy ?? true,
+)
+
+async function handleBounce(): Promise<void> {
+  bouncing.value = true
+  bounceResult.value = ''
+  bounceError.value = ''
+
+  // Build volumes map: filename → current volume (0 if muted)
+  const volumes: Record<string, number> = {}
+  for (const file of files.value) {
+    const state = stemState[file.stem_name]
+    volumes[file.filename] = state?.muted ? 0 : (state?.volume ?? 0.8)
+  }
+
+  try {
+    const { data } = await stemApi.bounce({
+      folder: folderName.value,
+      volumes,
+      output_name: bounceName.value.trim() || undefined,
+      format: bounceFormat.value,
+      bitrate: bounceBitrate.value,
+    })
+    bounceResult.value = data.filename
+  } catch (err: unknown) {
+    const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+    bounceError.value = msg ?? 'Bounce failed.'
+  } finally {
+    bouncing.value = false
+  }
+}
 </script>
 
 <template>
@@ -495,6 +547,85 @@ const displayName = computed(() =>
               </tr>
             </tbody>
           </table>
+        </div>
+      </div>
+
+      <!-- Bounce / Export panel -->
+      <div class="card mt-4">
+        <div class="card-header py-2">
+          <strong class="small">
+            <i class="bi bi-file-earmark-music me-1 text-primary"></i>Bounce / Export Mix
+          </strong>
+        </div>
+        <div class="card-body">
+          <p class="text-muted small mb-3">
+            Mix all stems at their current volume levels and export a new MP3. Muted stems are excluded.
+          </p>
+          <div class="row g-3 align-items-end">
+            <div class="col-md-4">
+              <label class="form-label small mb-1">Output filename (optional)</label>
+              <input
+                v-model="bounceName"
+                type="text"
+                class="form-control form-control-sm"
+                :placeholder="`${folderName}_bounce`"
+                :disabled="bouncing"
+              />
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small mb-1">Format</label>
+              <select v-model="bounceFormat" class="form-select form-select-sm" :disabled="bouncing">
+                <option v-for="f in BOUNCE_FORMATS" :key="f.value" :value="f.value">{{ f.label }}</option>
+              </select>
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small mb-1">Bitrate</label>
+              <select
+                v-model="bounceBitrate"
+                class="form-select form-select-sm"
+                :disabled="bouncing || !bounceFormatLossy"
+                :title="bounceFormatLossy ? '' : 'Not applicable for lossless formats'"
+              >
+                <option v-for="b in BOUNCE_BITRATES" :key="b" :value="b">{{ b }}</option>
+              </select>
+            </div>
+            <div class="col-md-4">
+              <button
+                class="btn btn-primary w-100"
+                :disabled="bouncing"
+                @click="handleBounce"
+              >
+                <span v-if="bouncing" class="spinner-border spinner-border-sm me-2"></span>
+                <i v-else class="bi bi-arrow-down-circle me-2"></i>
+                {{ bouncing ? 'Exporting…' : `Bounce to ${bounceFormat.toUpperCase()}` }}
+              </button>
+            </div>
+          </div>
+
+          <!-- Volume preview (active stems) -->
+          <div class="mt-3 d-flex flex-wrap gap-2">
+            <span
+              v-for="file in files"
+              :key="file.filename"
+              class="badge"
+              :class="stemState[file.stem_name]?.muted ? 'bg-secondary' : 'bg-primary'"
+            >
+              {{ file.stem_name }}
+              {{ stemState[file.stem_name]?.muted
+                ? '🔇'
+                : Math.round((stemState[file.stem_name]?.volume ?? 0.8) * 100) + '%' }}
+            </span>
+          </div>
+
+          <!-- Result -->
+          <div v-if="bounceResult" class="alert alert-success mt-3 mb-0 py-2 small">
+            <i class="bi bi-check-circle me-1"></i>
+            Exported as <strong>{{ bounceResult }}</strong> — find it in
+            <a href="/media" class="alert-link">Media Files</a>.
+          </div>
+          <div v-if="bounceError" class="alert alert-danger mt-3 mb-0 py-2 small">
+            <i class="bi bi-exclamation-circle me-1"></i>{{ bounceError }}
+          </div>
         </div>
       </div>
 

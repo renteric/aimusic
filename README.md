@@ -15,12 +15,16 @@ and transcription. Login-protected, containerised, and ready to self-host.
 | Quality control | Bitrate selection from 8k up to 320k |
 | Batch download | Playlist URL or multi-line text search |
 | Real-time logs | Verbose mode streams yt-dlp output live via SSE |
+| Auto-transcribe / auto-stem | Optionally run Whisper and/or Demucs automatically after each download |
+| Download queue | Track all download jobs and their status from a dedicated queue view |
 | Media browser | Sortable file listing with in-browser player, download, delete |
 | Metadata cleaner | Strip all tags from files — from the UI or the CLI |
-| Melody extractor | Transcribe a melody to MIDI + MusicXML from any audio file |
+| Audio transcription | Whisper microservice — transcribes audio to Markdown beside the file |
+| Melody extractor | Extract a melody line to MIDI + MusicXML from any audio file |
 | Stem separation | Split audio into vocals, drums, bass, guitar, piano via Demucs / LALAL.AI / AudioSep |
-| Audio transcription | Whisper service integration — transcribes audio to `.txt` beside the file |
-| My Docs | Markdown document browser and editor with live preview, rich-text mode, rename, search, and in-doc link navigation |
+| AI analysis | Clean transcripts, analyse song structure, generate tags, and translate lyrics via Claude |
+| My Docs | Markdown document browser and editor with live preview, rich-text mode, rename, and full-text search |
+| Storage dashboard | Media library usage breakdown by file format and folder |
 | Authentication | SQLite-backed login, JWT cookies (HttpOnly + SameSite=Lax) |
 | Role-based access | Four roles: superadmin, admin, user, viewer — enforced at API and UI level |
 | User management | Admin panel (`/admin`) for full user CRUD — create, edit, delete, set role |
@@ -81,7 +85,7 @@ cd aimusic
 
 ```bash
 cp .env.example .env
-# Edit .env — at minimum set SECRET_KEY and ADMIN_PASSWORD
+# Edit .env — at minimum set SECRET_KEY, ADMIN_PASSWORD, and ANTHROPIC_API_KEY
 ```
 
 ### 3. Start the stack
@@ -132,6 +136,7 @@ All settings live in `.env`. Copy `.env.example` to get started.
 | `TRANSCRIBE_SERVICE_URL` | `http://transcribe:9000` | Whisper service URL |
 | `TRANSCRIBE_PORT` | `9000` | Port the transcription service binds to |
 | `SEPARATOR_URL` | `http://separator:8000` | Stem extraction service URL |
+| `ANTHROPIC_API_KEY` | — | Claude API key for AI analysis features (optional) |
 | `CORS_ORIGINS` | `` | Dev CORS origins — empty in production |
 
 ### Separator (all prefixed `MUSEP_`)
@@ -198,7 +203,7 @@ aimusic/
 │   ├── app/
 │   │   ├── __init__.py   # create_app() factory
 │   │   ├── main.py       # Uvicorn entry point
-│   │   ├── api/          # Routers: auth, admin, download, media, docs, stem
+│   │   ├── api/          # Routers: auth, admin, download, media, docs, stem, melody, ai
 │   │   ├── core/         # AppConfig, JWT auth, security middleware, RBAC
 │   │   ├── models/       # User model, SQLite helpers
 │   │   ├── services/     # yt-dlp CLI, metadata cleaner, melody extractor
@@ -208,7 +213,8 @@ aimusic/
 │   └── requirements.txt
 ├── frontend/             # Vue 3 SPA served by nginx (port APP_PORT)
 │   ├── src/
-│   │   ├── views/        # Login, Home, Download, MediaFiles, Admin, MyDocs, stem/*
+│   │   ├── views/        # Login, Home, Download, MediaFiles, Admin, MyDocs, Melody,
+│   │   │                 # DownloadQueue, StorageDashboard, stem/*
 │   │   ├── services/     # Axios API client + TypeScript types
 │   │   └── stores/       # Pinia auth store
 │   ├── Dockerfile        # Multi-stage: Node 22 → nginx 1.27
@@ -246,7 +252,12 @@ Use the superadmin credentials from your `.env` file.
 3. Pick **Format** (default MP3) and **Bitrate** (default 320k).
 4. Optionally set a sub-folder name under **Output Directory**.
 5. Enable **Verbose output** to watch yt-dlp logs in real time via SSE.
-6. Click **Start Download**.
+6. Optionally enable **Auto-transcribe** (Whisper) and/or **Auto-stem** (Demucs) — these run automatically after download completes and stream their progress to the same log view.
+7. Click **Start Download**.
+
+### Download Queue
+
+Navigate to **Queue** to see all recent download jobs and their status. Running jobs show a spinner; completed jobs show a success or failure badge. Dismiss finished jobs with the × button. The queue auto-refreshes every 3 seconds while any job is still running.
 
 ### Media browser
 
@@ -257,7 +268,33 @@ Navigate to **Media Files** to browse downloaded content.
 - **Download** — click the download icon to save locally.
 - **Delete** — tick checkboxes and click **Delete selected**.
 - **Metadata** — strip all tags from the current folder via the cleaner panel.
-- **Transcribe** — send a file to the Whisper service; a `.txt` is written beside it.
+- **Transcribe** — send a file to the Whisper service; a `.md` is written beside it.
+- **Melody** — navigate to the Melody Extractor pre-filled with the file path.
+- **AI** — open the AI panel to clean transcripts, analyse the song, generate tags, or translate lyrics.
+
+### AI Analysis
+
+The AI panel (✨ button in the media browser) offers four Claude-powered actions:
+
+| Action | Input | Output |
+| ------ | ----- | ------ |
+| **Clean Transcript** | `.md` transcript file | Corrected punctuation, labelled sections |
+| **Analyse Song** | Audio file or transcript | Structure map, themes, lyrical devices |
+| **Generate Tags** | Audio file or transcript | Genre, mood, energy, tempo, instruments as JSON |
+| **Translate** | Audio file or transcript + target language | Full singable translation with cultural notes |
+
+All actions have a **& Save** variant that writes the result back to disk as a sibling file.
+Requires `ANTHROPIC_API_KEY` to be set in `.env`.
+
+### Melody Extractor
+
+Navigate to **Melody** (or click the ♩ button in the media browser) to extract a melody line.
+
+1. Enter the audio file path (pre-filled when navigating from the media browser).
+2. Optionally expand **Advanced options** to override BPM, key, mode, pitch range, and HPSS.
+3. Click **Extract Melody** — pYIN analysis runs in the background.
+4. Download individual outputs (Melody MIDI, Duet MIDI, Lead Sheet MusicXML, Notes CSV) or the full ZIP.
+5. Click **Save to Library** to copy outputs alongside the source audio file.
 
 ### Stem separation
 
@@ -266,6 +303,10 @@ Navigate to **Stems** to separate audio into individual instrument tracks.
 - **Demucs** — local AI model (vocals, drums, bass, guitar, piano, other).
 - **LALAL.AI** — cloud-based, requires an API key in `.env`.
 - **AudioSep** — text-query separation (requires optional local model install).
+
+### Storage Dashboard
+
+Navigate to **Storage** to see a usage breakdown of your media library — total size, file count, and bar charts by format and folder. Sortable by size or file count.
 
 ### My Docs
 
@@ -345,6 +386,7 @@ make docker-extract-melody AUDIO=media/song.mp3 MELODY_OUT=out
 - File-serving routes use `safe_media_path()` to prevent path traversal.
 - Passwords hashed with Werkzeug PBKDF2-SHA256.
 - The superadmin account cannot be deleted or have its role changed via the API.
+- The Claude API key is server-side only — never exposed to the browser.
 
 ---
 
@@ -356,3 +398,4 @@ make docker-extract-melody AUDIO=media/song.mp3 MELODY_OUT=out
 - [Pinia documentation](https://pinia.vuejs.org/)
 - [Demucs](https://github.com/facebookresearch/demucs)
 - [OpenAI Whisper](https://github.com/openai/whisper)
+- [Anthropic Claude](https://www.anthropic.com/)

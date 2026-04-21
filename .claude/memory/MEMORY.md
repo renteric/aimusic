@@ -7,3 +7,4 @@
 - [feedback_i18n_apostrophes.md](feedback_i18n_apostrophes.md) — Never use ASCII `'` in vue-i18n locale strings; use typographic `'` (U+2019) — crashes the message compiler at runtime
 - [feedback_no_inline_styles.md](feedback_no_inline_styles.md) — Never use `style=""` or static `:style=""` in templates; add named classes to main.css instead (CSP + security requirement)
 - [feedback_python_standards.md](feedback_python_standards.md) — Python: always use class objects, reuse existing classes/functions, centralize constants, optimize, and add Google-style docstrings to every public symbol
+- [project_ai_layer.md](project_ai_layer.md) — Claude AI layer: /api/ai/cleanup + /api/ai/analyse live in backend/app/api/ai.py; model = claude-sonnet-4-6; next: auto-tag + lyric translation

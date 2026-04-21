@@ -82,6 +82,21 @@ async function handleLogout(): Promise<void> {
               <i class="bi bi-journal-text me-1"></i>{{ t('nav.my_docs') }}
             </RouterLink>
           </li>
+          <li v-if="!auth.isViewer" class="nav-item">
+            <RouterLink class="nav-link" to="/melody">
+              <i class="bi bi-music-note-list me-1"></i>{{ t('nav.melody') }}
+            </RouterLink>
+          </li>
+          <li class="nav-item">
+            <RouterLink class="nav-link" to="/queue">
+              <i class="bi bi-list-task me-1"></i>{{ t('nav.queue') }}
+            </RouterLink>
+          </li>
+          <li class="nav-item">
+            <RouterLink class="nav-link" to="/storage">
+              <i class="bi bi-pie-chart me-1"></i>{{ t('nav.storage') }}
+            </RouterLink>
+          </li>
 
           <!-- Stem Extraction dropdown (admin + superadmin only) -->
           <li v-if="auth.isAdmin" class="nav-item dropdown">

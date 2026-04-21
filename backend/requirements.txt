@@ -16,6 +16,18 @@ werkzeug>=3.1.0
 # HTTP client (stem proxy)
 httpx>=0.27.0
 
+# Anthropic Claude SDK (AI intelligence layer)
+anthropic>=0.40.0
+
+# Melody extraction (librosa + pYIN pitch tracking, MIDI, MusicXML)
+librosa>=0.10.0
+soundfile>=0.12.0
+mido>=1.3.0
+music21>=9.3.0
+numpy>=1.24.0
+scipy>=1.11.0
+tqdm>=4.65.0
+
 # Settings / env
 python-dotenv>=1.0.0
 

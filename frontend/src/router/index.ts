@@ -44,6 +44,21 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/MyDocsView.vue'),
   },
   {
+    path: '/melody',
+    name: 'Melody',
+    component: () => import('@/views/MelodyView.vue'),
+  },
+  {
+    path: '/queue',
+    name: 'DownloadQueue',
+    component: () => import('@/views/DownloadQueueView.vue'),
+  },
+  {
+    path: '/storage',
+    name: 'Storage',
+    component: () => import('@/views/StorageDashboardView.vue'),
+  },
+  {
     path: '/mydocs/:pathMatch(.*)*',
     name: 'MyDocsNested',
     component: () => import('@/views/MyDocsView.vue'),

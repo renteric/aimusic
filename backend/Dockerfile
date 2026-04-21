@@ -17,12 +17,14 @@ ARG USER_NAME=rik
 # libimage-exiftool-perl : metadata reading/writing (used by metadata_cleaner)
 # gosu                   : drop from root to app user in entrypoint
 # nodejs                 : required by yt-dlp for YouTube JS extraction
+# libsndfile1            : audio I/O backend for soundfile / librosa (melody extraction)
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ffmpeg \
         libimage-exiftool-perl \
         gosu \
         nodejs \
+        libsndfile1 \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 

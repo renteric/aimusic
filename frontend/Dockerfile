@@ -10,11 +10,15 @@ FROM node:22-alpine AS builder
 
 WORKDIR /app
 
-# Install dependencies first for better layer caching.
-# Use npm install (generates lockfile if absent); switch to npm ci once
-# package-lock.json is committed to the repository.
+# Install dependencies using the committed lockfile for a deterministic,
+# reproducible install.  The BuildKit cache mount persists the npm cache
+# across rebuilds so packages are not re-downloaded on every build.
 COPY package*.json ./
-RUN npm install --prefer-offline
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --prefer-offline \
+        --fetch-retries=5 \
+        --fetch-retry-mintimeout=10000 \
+        --fetch-retry-maxtimeout=60000
 
 # Copy source and build.
 COPY . .

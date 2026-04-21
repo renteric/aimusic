@@ -30,6 +30,9 @@ const features: Feature[] = [
   { icon: 'bi-mic',               titleKey: 'home.features.transcription.title',      textKey: 'home.features.transcription.text' },
   { icon: 'bi-music-note-beamed', titleKey: 'home.features.melody_extractor.title',   textKey: 'home.features.melody_extractor.text' },
   { icon: 'bi-journal-text',      titleKey: 'home.features.my_docs.title',            textKey: 'home.features.my_docs.text' },
+  { icon: 'bi-stars',             titleKey: 'home.features.ai_analysis.title',        textKey: 'home.features.ai_analysis.text' },
+  { icon: 'bi-list-task',         titleKey: 'home.features.download_queue.title',     textKey: 'home.features.download_queue.text' },
+  { icon: 'bi-pie-chart',         titleKey: 'home.features.storage_dashboard.title',  textKey: 'home.features.storage_dashboard.text' },
   { icon: 'bi-people',            titleKey: 'home.features.user_management.title',    textKey: 'home.features.user_management.text', adminOnly: true },
 ]
 

@@ -49,6 +49,11 @@ export interface DownloadPayload {
   search_txt?: string
   output?: string
   verbose: boolean
+  auto_transcribe?: boolean
+  transcribe_language?: string
+  transcribe_model?: string
+  auto_stem?: boolean
+  stem_model?: string
 }
 
 /** Response from POST /api/media/delete */
@@ -263,4 +268,164 @@ export interface StemLibraryResponse {
 export interface StemFolderResponse {
   folder: string
   files: StemFile[]
+}
+
+/** Request body for POST /api/stem/bounce */
+export interface StemBounceRequest {
+  folder: string
+  volumes: Record<string, number>
+  output_name?: string
+  format?: string
+  bitrate?: string
+}
+
+/** Response from POST /api/stem/bounce */
+export interface StemBounceResponse {
+  success: boolean
+  path: string
+  filename: string
+}
+
+// ── Download Queue ────────────────────────────────────────────────────────────
+
+/** A download job summary returned by GET /api/download/jobs */
+export interface DownloadJobSummary {
+  job_id: string
+  done: boolean
+  success: boolean | null
+  message: string
+  error: string
+  started_at: number
+  output_dir: string
+  auto_transcribe: boolean
+  auto_stem: boolean
+}
+
+// ── Storage Dashboard ─────────────────────────────────────────────────────────
+
+/** A single row in the storage breakdown (by format or by folder) */
+export interface StorageRow {
+  ext?: string
+  folder?: string
+  count: number
+  bytes: number
+}
+
+/** Response from GET /api/media/storage */
+export interface StorageStats {
+  total_bytes: number
+  total_files: number
+  by_format: StorageRow[]
+  by_folder: StorageRow[]
+}
+
+// ── Melody Extraction ─────────────────────────────────────────────────────────
+
+/** Job status values for melody extraction */
+export type MelodyJobStatus = 'pending' | 'processing' | 'done' | 'failed'
+
+/** Summary dict inside a completed MelodyJob */
+export interface MelodySummary {
+  audio: string
+  duration_sec: number
+  sr: number
+  bpm: number
+  key: string
+  mode: string
+  notes_count: number
+  outputs: Record<string, string>
+}
+
+/** A melody extraction job returned by /api/melody/jobs */
+export interface MelodyJob {
+  job_id: string
+  status: MelodyJobStatus
+  audio_path: string
+  audio_name: string
+  started_at: number
+  error: string
+  /** List of available output filenames (populated when status === 'done') */
+  outputs: string[]
+  /** Populated when status === 'done' */
+  summary?: MelodySummary
+}
+
+/** Response from POST /api/melody/extract */
+export interface MelodyExtractResponse {
+  job_id: string
+  status: MelodyJobStatus
+}
+
+// ── AI Intelligence Layer ─────────────────────────────────────────────────────
+
+/** Structured tag data returned by POST /api/ai/tags */
+export interface AiTags {
+  genre: string[]
+  mood: string[]
+  energy: 'low' | 'medium' | 'high'
+  tempo: 'slow' | 'moderate' | 'fast'
+  themes: string[]
+  instruments: string[]
+  language: string
+  tags: string[]
+}
+
+/** Request body for POST /api/ai/tags */
+export interface AiTagsRequest {
+  path: string
+  save?: boolean
+}
+
+/** Response from POST /api/ai/tags */
+export interface AiTagsResponse {
+  success: boolean
+  tags: AiTags
+  /** Relative path inside MEDIA_DIR where the .tags.json was saved, or null. */
+  saved_path: string | null
+  path: string
+}
+
+/** Request body for POST /api/ai/cleanup */
+export interface AiCleanupRequest {
+  path: string
+  save?: boolean
+}
+
+/** Response from POST /api/ai/cleanup */
+export interface AiCleanupResponse {
+  success: boolean
+  cleaned: string
+  path: string
+}
+
+/** Request body for POST /api/ai/analyse */
+export interface AiAnalyseRequest {
+  path: string
+  save?: boolean
+}
+
+/** Response from POST /api/ai/analyse */
+export interface AiAnalyseResponse {
+  success: boolean
+  analysis: string
+  /** Relative path inside MEDIA_DIR where the result was saved, or null. */
+  saved_path: string | null
+  path: string
+}
+
+/** Request body for POST /api/ai/translate */
+export interface AiTranslateRequest {
+  path: string
+  target_language: string
+  save?: boolean
+}
+
+/** Response from POST /api/ai/translate */
+export interface AiTranslateResponse {
+  success: boolean
+  translation: string
+  /** Relative path inside MEDIA_DIR where the translation was saved, or null. */
+  saved_path: string | null
+  path: string
+  target_language: string
 }

@@ -30,6 +30,27 @@ const submitting = ref(false)
 const errorMsg = ref('')
 const successMsg = ref('')
 
+// Post-processing options
+const autoTranscribe = ref(false)
+const transcribeLang = ref('Spanish')
+const transcribeModel = ref('base')
+const autoStem = ref(false)
+const stemModel = ref('htdemucs_6s')
+
+const TRANSCRIBE_LANGUAGES = [
+  'Spanish', 'English', 'French', 'Portuguese', 'German',
+  'Italian', 'Japanese', 'Chinese', 'Korean', 'Arabic',
+  'Russian', 'Hindi', 'Dutch', 'Polish', 'Turkish',
+] as const
+
+const TRANSCRIBE_MODELS = ['tiny', 'base', 'small', 'medium', 'large'] as const
+
+const STEM_MODELS = [
+  { value: 'htdemucs_6s', label: 'htdemucs_6s — 6 stems (default)' },
+  { value: 'htdemucs', label: 'htdemucs — 4 stems' },
+  { value: 'mdx_extra', label: 'mdx_extra — high quality' },
+] as const
+
 /** Log sessions for verbose downloads, newest first. */
 interface LogSession {
   jobId: string
@@ -87,6 +108,11 @@ async function handleSubmit(): Promise<void> {
       search_txt: isSearchMode.value ? searchTxt.value.trim() : undefined,
       output: output.value.trim() || undefined,
       verbose: verbose.value,
+      auto_transcribe: autoTranscribe.value,
+      transcribe_language: transcribeLang.value,
+      transcribe_model: transcribeModel.value,
+      auto_stem: autoStem.value,
+      stem_model: stemModel.value,
     })
 
     if (!data.success) {
@@ -252,6 +278,55 @@ function streamLogs(jobId: string): void {
                     <label for="verbose" class="form-check-label">
                       {{ t('download.verbose_label') }}
                     </label>
+                  </div>
+                </div>
+
+                <!-- After-download post-processing -->
+                <div class="col-12">
+                  <div class="border rounded p-3 bg-light">
+                    <p class="small fw-semibold mb-2">
+                      <i class="bi bi-stars me-1 text-warning"></i>{{ t('download.post_section') }}
+                    </p>
+
+                    <!-- Auto-transcribe -->
+                    <div class="form-check mb-2">
+                      <input id="autoTranscribe" v-model="autoTranscribe" type="checkbox" class="form-check-input" />
+                      <label for="autoTranscribe" class="form-check-label small">
+                        <i class="bi bi-mic me-1 text-info"></i>{{ t('download.auto_transcribe') }}
+                      </label>
+                    </div>
+                    <div v-if="autoTranscribe" class="row g-2 ms-3 mb-2">
+                      <div class="col-6">
+                        <label class="form-label small mb-1">{{ t('download.transcribe_lang') }}</label>
+                        <select v-model="transcribeLang" class="form-select form-select-sm">
+                          <option v-for="lang in TRANSCRIBE_LANGUAGES" :key="lang" :value="lang">{{ lang }}</option>
+                        </select>
+                      </div>
+                      <div class="col-6">
+                        <label class="form-label small mb-1">{{ t('download.transcribe_model') }}</label>
+                        <select v-model="transcribeModel" class="form-select form-select-sm">
+                          <option v-for="m in TRANSCRIBE_MODELS" :key="m" :value="m">{{ m }}</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <!-- Auto-stem -->
+                    <div class="form-check mb-2">
+                      <input id="autoStem" v-model="autoStem" type="checkbox" class="form-check-input" />
+                      <label for="autoStem" class="form-check-label small">
+                        <i class="bi bi-layers me-1 text-success"></i>{{ t('download.auto_stem') }}
+                      </label>
+                    </div>
+                    <div v-if="autoStem" class="ms-3 mb-1">
+                      <label class="form-label small mb-1">{{ t('download.stem_model') }}</label>
+                      <select v-model="stemModel" class="form-select form-select-sm download-stem-select">
+                        <option v-for="m in STEM_MODELS" :key="m.value" :value="m.value">{{ m.label }}</option>
+                      </select>
+                    </div>
+
+                    <p v-if="autoTranscribe || autoStem" class="small text-muted mb-0 mt-2">
+                      <i class="bi bi-info-circle me-1"></i>{{ t('download.post_hint') }}
+                    </p>
                   </div>
                 </div>
 

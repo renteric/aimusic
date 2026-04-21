@@ -299,6 +299,15 @@ tr {
   max-height: 75vh;
 }
 
+.ai-lang-select {
+  width: auto;
+  min-width: 130px;
+}
+
+.download-stem-select {
+  max-width: 280px;
+}
+
 /* ── Footer ──────────────────────────────────────────────────────────────────── */
 
 .app-footer {
