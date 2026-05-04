@@ -188,6 +188,66 @@ class AudioSepSeparator:
 
     # ── Separation ────────────────────────────────────────────────────────────
 
+    def _preprocess_input(self, audio_path: Path, dest: Path) -> Path:
+        """
+        Convert *audio_path* to 32 kHz mono WAV for AudioSep.
+
+        AudioSep's native sample rate is 32 kHz mono.  When the input is
+        any other format or rate, AudioSep resamples internally using
+        torchaudio's default algorithm, which introduces more artifacts than
+        ffmpeg's high-quality SoX resampler.  Pre-converting here gives the
+        model the cleanest possible input.
+
+        If the input is already a 32 kHz mono WAV the file is copied as-is
+        to avoid an unnecessary re-encode.
+
+        Args:
+            audio_path: Original uploaded audio file.
+            dest:       Destination path for the pre-processed WAV.
+
+        Returns:
+            Path to the pre-processed file (always *dest*).
+
+        Raises:
+            AudioSepError: If ffmpeg is not on PATH or conversion fails.
+        """
+        import shutil
+        import torchaudio as _ta
+
+        try:
+            info = _ta.info(str(audio_path))
+            already_ok = (
+                audio_path.suffix.lower() == ".wav"
+                and info.sample_rate == 32000
+                and info.num_channels == 1
+            )
+        except Exception:
+            already_ok = False
+
+        if already_ok:
+            shutil.copy2(str(audio_path), str(dest))
+            return dest
+
+        cmd = [
+            "ffmpeg", "-y",
+            "-i", str(audio_path),
+            "-ar", "32000",
+            "-ac", "1",
+            "-sample_fmt", "s16",
+            str(dest),
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            raise AudioSepError(
+                f"Input pre-processing failed: {result.stderr[-300:]}"
+            )
+        logger.debug(
+            "Pre-processed input → 32 kHz mono WAV: %s (%.1f MB)",
+            dest.name,
+            dest.stat().st_size / 1_024 / 1_024,
+        )
+        return dest
+
     def _run_inference(
         self,
         audio_path: Path,
@@ -222,6 +282,14 @@ class AudioSepSeparator:
 
         try:
             from pipeline import separate_audio  # type: ignore
+            import torchaudio as _ta
+
+            # use_chunk=True splits audio into overlapping windows — necessary
+            # for long tracks but adds ~30% overhead on short clips.
+            # Disable for files under 3 minutes to avoid the chunking penalty.
+            info = _ta.info(str(audio_path))
+            duration_s = info.num_frames / info.sample_rate
+            use_chunk = duration_s > 180
 
             separate_audio(
                 self._pipeline,
@@ -229,42 +297,70 @@ class AudioSepSeparator:
                 text_prompt,
                 str(output_path),
                 self._device,
-                use_chunk=True,
+                use_chunk=use_chunk,
             )
-            logger.debug("separate_audio() succeeded")
+            logger.debug("separate_audio() succeeded (use_chunk=%s, duration=%.1fs)", use_chunk, duration_s)
         except Exception as exc:
             logger.error("AudioSep inference failed: %s", exc)
             raise AudioSepError(f"AudioSep inference failed: {exc}") from exc
 
-    def _convert_to_mp3(self, wav_path: Path, mp3_path: Path) -> None:
+    def _convert_audio(
+        self,
+        wav_path: Path,
+        output_path: Path,
+        output_format: str,
+        mp3_bitrate: int,
+    ) -> None:
         """
-        Convert a WAV file to MP3 using FFmpeg.
+        Convert a WAV file to the requested output format using FFmpeg.
+
+        For WAV output the source file is moved directly (no re-encoding).
+        For FLAC and MP3 FFmpeg resamples to 44100 Hz stereo to avoid
+        sample-rate mismatch artifacts (AudioSep outputs at 32 kHz).
 
         Args:
-            wav_path: Source WAV file.
-            mp3_path: Destination MP3 path.
+            wav_path:      Source WAV produced by AudioSep (32 kHz).
+            output_path:   Destination file path (extension determines format).
+            output_format: One of ``"wav"``, ``"flac"``, or ``"mp3"``.
+            mp3_bitrate:   Target MP3 bitrate in kbps (used only for ``"mp3"``).
 
         Raises:
             AudioSepError: If FFmpeg is not on PATH or conversion fails.
         """
-        logger.debug("Converting %s → %s", wav_path.name, mp3_path.name)
-        cmd = [
-            "ffmpeg", "-y",
-            "-i", str(wav_path),
-            "-b:a", "320k",
-            str(mp3_path),
-        ]
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-        )
+        import shutil
+
+        if output_format == "wav":
+            shutil.move(str(wav_path), str(output_path))
+            logger.debug("WAV move complete: %s", output_path.name)
+            return
+
+        logger.debug("Converting %s → %s", wav_path.name, output_path.name)
+
+        if output_format == "flac":
+            cmd = [
+                "ffmpeg", "-y",
+                "-i", str(wav_path),
+                "-ar", "44100",
+                "-ac", "2",
+                str(output_path),
+            ]
+        else:  # mp3
+            cmd = [
+                "ffmpeg", "-y",
+                "-i", str(wav_path),
+                "-ar", "44100",
+                "-ac", "2",
+                "-b:a", f"{mp3_bitrate}k",
+                str(output_path),
+            ]
+
+        result = subprocess.run(cmd, capture_output=True, text=True)
         if result.returncode != 0:
             logger.error("FFmpeg conversion failed:\n%s", result.stderr)
             raise AudioSepError(
-                f"FFmpeg conversion to MP3 failed: {result.stderr[-300:]}"
+                f"FFmpeg conversion to {output_format.upper()} failed: {result.stderr[-300:]}"
             )
-        logger.debug("MP3 conversion complete: %s", mp3_path.name)
+        logger.debug("%s conversion complete: %s", output_format.upper(), output_path.name)
 
     # ── Public API ────────────────────────────────────────────────────────────
 
@@ -275,12 +371,14 @@ class AudioSepSeparator:
         stems: List[str],
         prompts: Optional[Dict[str, str]] = None,
         progress_callback: Optional[Callable[[int, str], None]] = None,
+        output_format: str = "wav",
+        mp3_bitrate: int = 320,
     ) -> Dict[str, Path]:
         """
         Separate *input_path* into the requested stems using AudioSep.
 
         Each stem is processed independently with its own text prompt.
-        Results are saved as MP3 files in *output_dir*.
+        Results are saved in *output_dir* using the requested format.
 
         Args:
             input_path:        Path to the source audio file.
@@ -289,6 +387,9 @@ class AudioSepSeparator:
             prompts:           Optional mapping of stem_id → text prompt.
                                Defaults to :data:`DEFAULT_PROMPTS`.
             progress_callback: Optional ``(pct: int, msg: str)`` callback.
+            output_format:     Output container: ``"wav"``, ``"flac"``, or ``"mp3"``.
+                               Defaults to ``"wav"`` for lossless quality.
+            mp3_bitrate:       Target bitrate in kbps when *output_format* is ``"mp3"``.
 
         Returns:
             Mapping of ``stem_id → Path`` for every extracted stem.
@@ -297,6 +398,7 @@ class AudioSepSeparator:
             AudioSepError: If AudioSep is not installed, the checkpoint is
                            missing, or inference fails.
         """
+        fmt = output_format if output_format in {"wav", "flac", "mp3"} else "wav"
         output_dir.mkdir(parents=True, exist_ok=True)
         effective_prompts = {**DEFAULT_PROMPTS, **(prompts or {})}
         results: Dict[str, Path] = {}
@@ -319,6 +421,15 @@ class AudioSepSeparator:
         with tempfile.TemporaryDirectory(prefix="audiosep_") as tmp:
             tmp_path = Path(tmp)
 
+            # Pre-process input once — avoids torchaudio resampling artifacts
+            if progress_callback:
+                progress_callback(5, "🔧 Pre-processing audio…")
+            try:
+                clean_input = self._preprocess_input(input_path, tmp_path / "input_32k.wav")
+            except AudioSepError as exc:
+                logger.warning("Input pre-processing failed (%s) — using original", exc)
+                clean_input = input_path
+
             for idx, stem_id in enumerate(stems):
                 prompt = effective_prompts.get(stem_id)
                 if prompt is None:
@@ -335,10 +446,10 @@ class AudioSepSeparator:
                     )
 
                 wav_out = tmp_path / f"{stem_id}.wav"
-                mp3_out = output_dir / f"{stem_id}.mp3"
+                final_out = output_dir / f"{stem_id}.{fmt}"
 
                 try:
-                    self._run_inference(input_path, prompt, wav_out)
+                    self._run_inference(clean_input, prompt, wav_out)
                 except AudioSepError as exc:
                     logger.error(
                         "Inference failed for stem '%s': %s", stem_id, exc
@@ -352,19 +463,14 @@ class AudioSepSeparator:
                     continue
 
                 try:
-                    self._convert_to_mp3(wav_out, mp3_out)
+                    self._convert_audio(wav_out, final_out, fmt, mp3_bitrate)
                 except AudioSepError as exc:
                     logger.error(
-                        "MP3 conversion failed for '%s': %s", stem_id, exc
+                        "Audio conversion failed for '%s': %s", stem_id, exc
                     )
-                    # Keep the WAV as fallback
-                    import shutil
-                    wav_fallback = output_dir / f"{stem_id}.wav"
-                    shutil.copy(wav_out, wav_fallback)
-                    results[stem_id] = wav_fallback
                     continue
 
-                results[stem_id] = mp3_out
+                results[stem_id] = final_out
                 done_pct = int(10 + ((idx + 1) / total) * 80)
                 if progress_callback:
                     progress_callback(done_pct, f"✅ '{stem_id}' extracted")
@@ -372,8 +478,8 @@ class AudioSepSeparator:
                 logger.info(
                     "Stem '%s' saved → %s (%.1f MB)",
                     stem_id,
-                    mp3_out.name,
-                    mp3_out.stat().st_size / 1_024 / 1_024,
+                    final_out.name,
+                    final_out.stat().st_size / 1_024 / 1_024,
                 )
 
         logger.info(

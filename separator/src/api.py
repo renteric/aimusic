@@ -423,13 +423,14 @@ def _run_demucs(
         _cleanup_upload(audio_path)
 
 
-def _run_lalai(job_id: str, audio_path: Path, stems: List[str]) -> None:
+def _run_lalai(job_id: str, audio_path: Path, stems: List[str], output_format: str = "mp3") -> None:
     """Thread-pool worker: separate using the LALAL.AI cloud API.
 
     Args:
         job_id: ID of the registered :class:`Job`.
         audio_path: Path to the uploaded audio file.
         stems: List of stem names to request from LALAL.AI.
+        output_format: Output container — ``"mp3"`` (default) or ``"wav"``.
     """
     job = jobs[job_id]
     job.status = JobStatus.PROCESSING
@@ -448,6 +449,7 @@ def _run_lalai(job_id: str, audio_path: Path, stems: List[str]) -> None:
             output_dir=output_dir,
             stems=stems,
             progress_callback=_progress,
+            output_format=output_format,
         )
         _finalise_job(job, result, output_dir)
 
@@ -461,7 +463,12 @@ def _run_lalai(job_id: str, audio_path: Path, stems: List[str]) -> None:
 
 
 def _run_audiosep(
-    job_id: str, audio_path: Path, stems: List[str], prompts: Dict[str, str]
+    job_id: str,
+    audio_path: Path,
+    stems: List[str],
+    prompts: Dict[str, str],
+    output_format: str = "wav",
+    mp3_bitrate: int = 320,
 ) -> None:
     """Thread-pool worker: separate using local AudioSep model.
 
@@ -470,6 +477,8 @@ def _run_audiosep(
         audio_path: Path to the uploaded audio file.
         stems: List of stem names to extract.
         prompts: Mapping of stem name → text prompt for AudioSep.
+        output_format: Output container — ``"wav"``, ``"flac"``, or ``"mp3"``.
+        mp3_bitrate: Target MP3 bitrate in kbps (ignored unless output_format is ``"mp3"``).
     """
     job = jobs[job_id]
     job.status = JobStatus.PROCESSING
@@ -493,6 +502,8 @@ def _run_audiosep(
             stems=stems,
             prompts=prompts,
             progress_callback=_progress,
+            output_format=output_format,
+            mp3_bitrate=mp3_bitrate,
         )
         _finalise_job(job, result, output_dir)
 
@@ -609,11 +620,15 @@ async def start_demucs(
 
 # ── LALAL.AI ──────────────────────────────────────────────────────────────────
 
+_VALID_LALAI_FORMATS = {"mp3", "wav"}
+
+
 @app.post("/api/lalai/separate")
 async def start_lalai(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     stems: Optional[str] = Query(default=None),
+    output_format: str = Query(default="mp3"),
 ) -> dict:
     """Upload an audio file and start a LALAL.AI cloud separation job.
 
@@ -621,12 +636,13 @@ async def start_lalai(
         background_tasks: FastAPI background task runner (unused).
         file: Multipart audio file upload.
         stems: Optional comma-separated list of LALAL.AI stem identifiers.
+        output_format: Output container — ``"mp3"`` (default) or ``"wav"``.
 
     Returns:
         JSON ``{job_id, status, provider}`` for polling.
 
     Raises:
-        HTTPException: 400 for unsupported file type or invalid stems.
+        HTTPException: 400 for unsupported file type, invalid stems, or bad format.
         HTTPException: 413 if the upload exceeds the size limit.
         HTTPException: 503 if ``MUSEP_LALALAI_API_KEY`` is not configured.
     """
@@ -636,6 +652,10 @@ async def start_lalai(
             "LALAL.AI is not configured. "
             "Set the MUSEP_LALALAI_API_KEY environment variable.",
         )
+
+    fmt = output_format.lower()
+    if fmt not in _VALID_LALAI_FORMATS:
+        raise HTTPException(400, f"output_format must be one of: {', '.join(sorted(_VALID_LALAI_FORMATS))}")
 
     content = await file.read()
     _check_size(content, file.filename or "audio")
@@ -652,19 +672,25 @@ async def start_lalai(
     _create_job(job_id, filename, Provider.LALAI, "lalai", stem_list)
 
     loop = asyncio.get_event_loop()
-    loop.run_in_executor(executor, _run_lalai, job_id, upload_path, stem_list)
+    loop.run_in_executor(executor, _run_lalai, job_id, upload_path, stem_list, fmt)
 
-    logger.info("[%s] LALAI job queued — file=%s stems=%s", job_id[:8], filename, stem_list)
+    logger.info("[%s] LALAI job queued — file=%s stems=%s format=%s", job_id[:8], filename, stem_list, fmt)
     return {"job_id": job_id, "status": "queued", "provider": "lalai"}
 
 
 # ── AudioSep ──────────────────────────────────────────────────────────────────
+
+_VALID_FORMATS = {"wav", "flac", "mp3"}
+_VALID_BITRATES = {128, 192, 256, 320}
+
 
 @app.post("/api/audiosep/separate")
 async def start_audiosep(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     stems: Optional[str] = Query(default=None),
+    output_format: str = Query(default="wav"),
+    bitrate: int = Query(default=320),
 ) -> dict:
     """Upload an audio file and start an AudioSep text-query separation job.
 
@@ -676,12 +702,14 @@ async def start_audiosep(
         background_tasks: FastAPI background task runner (unused).
         file: Multipart audio file upload.
         stems: Optional comma-separated list of AudioSep stem identifiers.
+        output_format: Output container — ``"wav"`` (default), ``"flac"``, or ``"mp3"``.
+        bitrate: MP3 bitrate in kbps (128 / 192 / 256 / 320). Ignored for WAV/FLAC.
 
     Returns:
         JSON ``{job_id, status, provider}`` for polling.
 
     Raises:
-        HTTPException: 400 for unsupported file type or invalid stems.
+        HTTPException: 400 for unsupported file type, invalid stems, or bad format.
         HTTPException: 413 if the upload exceeds the size limit.
         HTTPException: 503 if AudioSep is not installed.
     """
@@ -691,6 +719,12 @@ async def start_audiosep(
             "AudioSep is not installed. "
             "Run: pip install git+https://github.com/Audio-AGI/AudioSep.git",
         )
+
+    fmt = output_format.lower()
+    if fmt not in _VALID_FORMATS:
+        raise HTTPException(400, f"output_format must be one of: {', '.join(sorted(_VALID_FORMATS))}")
+    if bitrate not in _VALID_BITRATES:
+        raise HTTPException(400, f"bitrate must be one of: {', '.join(str(b) for b in sorted(_VALID_BITRATES))}")
 
     content = await file.read()
     _check_size(content, file.filename or "audio")
@@ -712,11 +746,11 @@ async def start_audiosep(
     _create_job(job_id, filename, Provider.AUDIOSEP, "audiosep", stem_list)
 
     loop = asyncio.get_event_loop()
-    loop.run_in_executor(executor, _run_audiosep, job_id, upload_path, stem_list, prompts)
+    loop.run_in_executor(executor, _run_audiosep, job_id, upload_path, stem_list, prompts, fmt, bitrate)
 
     logger.info(
-        "[%s] AudioSep job queued — file=%s stems=%s",
-        job_id[:8], filename, stem_list,
+        "[%s] AudioSep job queued — file=%s stems=%s format=%s bitrate=%d",
+        job_id[:8], filename, stem_list, fmt, bitrate,
     )
     return {"job_id": job_id, "status": "queued", "provider": "audiosep"}
 

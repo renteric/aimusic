@@ -35,13 +35,15 @@ MODE        ?=
 HARMONY     ?=
 
 .PHONY: help \
+        build-bases \
         up down build rebuild logs restart ps \
         backend-shell frontend-shell \
         frontend-dev backend-dev \
         install-backend install-frontend \
         test lint \
         download clean-meta extract-melody \
-        docker-download docker-clean-meta docker-extract-melody
+        docker-download docker-clean-meta docker-extract-melody \
+        download-acestep download-separator
 
 # ── Help ───────────────────────────────────────────────────────────────────────
 
@@ -49,10 +51,13 @@ help:
 	@echo ""
 	@echo "  Docker (production)"
 	@echo "  ──────────────────────────────────────────────────────────"
+	@echo "  make build-bases                 Build shared base images (run once, or when system deps change)"
+	@echo "  make download-acestep            Download ACE-Step model weights (~10 GB) to ./models/acestep/"
+	@echo "  make download-separator          Download AudioSep (~1 GB) + CLAP encoder (~900 MB) + Demucs (~85 MB) to ./models/separator/"
 	@echo "  make up                          Start all services (detached)"
 	@echo "  make down                        Stop and remove containers"
-	@echo "  make build                       Build Docker images"
-	@echo "  make rebuild                     Rebuild from scratch, no cache"
+	@echo "  make build                       Build Docker images (requires base images)"
+	@echo "  make rebuild                     Rebuild everything from scratch, no cache"
 	@echo "  make logs                        Tail all container logs"
 	@echo "  make restart                     Restart all services"
 	@echo "  make ps                          Show container health/status"
@@ -81,20 +86,94 @@ help:
 
 # ── Docker ─────────────────────────────────────────────────────────────────────
 
+# Build the two shared base images.  Service Dockerfiles FROM these, so bases
+# must exist before `make build`.  BuildKit cache makes subsequent runs instant.
+build-bases:
+	docker build \
+		-f docker/Dockerfile.base \
+		-t ai-music-py313:latest \
+		.
+	docker build \
+		-f docker/Dockerfile.torch-base \
+		-t ai-music-py313-torch:latest \
+		.
+
+# Download ACE-Step model weights to ./models/acestep/ on the host.
+# Runs entirely via Docker — no local Python or pip required.
+# After completion, set ACESTEP_CHECKPOINT_PATH=/app/models/checkpoints in .env.
+download-acestep:
+	@mkdir -p models/acestep
+	@echo "Downloading ACE-Step/ACE-Step-v1-3.5B (~10 GB) to ./models/acestep/ ..."
+	docker run --rm -t \
+		-v "$(CURDIR)/models/acestep:/models" \
+		$(if $(HUGGINGFACE_HUB_API_KEY),-e HF_TOKEN="$(HUGGINGFACE_HUB_API_KEY)") \
+		python:3.13-slim \
+		sh -c "pip install -q --root-user-action=ignore huggingface_hub && \
+		       python -c \"from huggingface_hub import snapshot_download; \
+		                   snapshot_download('ACE-Step/ACE-Step-v1-3.5B', local_dir='/models')\""
+	@echo ""
+	@echo "Done. Now set in .env:"
+	@echo "  ACESTEP_CHECKPOINT_PATH=/app/models/checkpoints"
+	@echo "Then restart: docker compose restart acestep"
+
+# Download separator model weights to ./models/separator/ on the host.
+# - AudioSep checkpoint (~1 GB) from HuggingFace → ./models/separator/audiosep/
+# - Demucs htdemucs_6s (~85 MB) via the separator image → ./models/separator/torch/
+# Both run via Docker — no local Python or pip required.
+download-separator:
+	@mkdir -p models/separator/audiosep models/separator/clap models/separator/torch
+	@echo "Downloading AudioSep checkpoint (~1 GB) ..."
+	docker run --rm -t \
+		-v "$(CURDIR)/models/separator/audiosep:/models" \
+		$(if $(HUGGINGFACE_HUB_API_KEY),-e HF_TOKEN="$(HUGGINGFACE_HUB_API_KEY)") \
+		python:3.13-slim \
+		sh -c "pip install -q --root-user-action=ignore huggingface_hub && \
+		       python -c \"from huggingface_hub import hf_hub_download; \
+		                   hf_hub_download('audo/AudioSep', \
+		                                  'audiosep_base_4M_steps.ckpt', \
+		                                  local_dir='/models')\""
+	@echo "Downloading CLAP encoder weights (~900 MB) ..."
+	docker run --rm -t \
+		-v "$(CURDIR)/models/separator/clap:/models" \
+		$(if $(HUGGINGFACE_HUB_API_KEY),-e HF_TOKEN="$(HUGGINGFACE_HUB_API_KEY)") \
+		python:3.13-slim \
+		sh -c "pip install -q --root-user-action=ignore huggingface_hub && \
+		       python -c \"from huggingface_hub import hf_hub_download; \
+		                   hf_hub_download('lukewys/laion_clap', \
+		                                  'music_speech_audioset_epoch_15_esc_89.98.pt', \
+		                                  local_dir='/models')\""
+	@echo "Downloading Demucs htdemucs_6s model (~85 MB) ..."
+	docker run --rm -t \
+		-v "$(CURDIR)/models/separator/torch:/app/models/torch" \
+		-e TORCH_HOME=/app/models/torch \
+		ai-music-separator:latest \
+		python -c "from demucs.pretrained import get_model; get_model('htdemucs_6s')"
+	@echo ""
+	@echo "Done. Models are in ./models/separator/ and will be used automatically"
+	@echo "on next 'docker compose up' (no .env changes needed)."
+
 up:
-	@mkdir -p media data
+	@mkdir -p media data models/acestep models/separator/audiosep models/separator/clap models/separator/torch
 	docker compose up -d
 
 down:
 	docker compose down
 
-build:
+build: build-bases
 	docker compose build \
 		--build-arg USER_UID=$(shell id -u) \
 		--build-arg USER_GID=$(shell id -g) \
 		--build-arg USER_NAME=$(shell whoami)
 
 rebuild:
+	docker build --no-cache \
+		-f docker/Dockerfile.base \
+		-t ai-music-py313:latest \
+		.
+	docker build --no-cache \
+		-f docker/Dockerfile.torch-base \
+		-t ai-music-py313-torch:latest \
+		.
 	docker compose build --no-cache \
 		--build-arg USER_UID=$(shell id -u) \
 		--build-arg USER_GID=$(shell id -g) \

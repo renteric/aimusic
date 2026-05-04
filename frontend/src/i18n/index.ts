@@ -1,9 +1,9 @@
 /**
- * i18n/index.ts - Internationalisation setup for AI-Powered-Music.
+ * i18n/index.ts - Internationalisation setup for AI-Music.
  *
  * Uses vue-i18n v9 in Composition API mode (legacy: false).
  * Supported locales: English (default), French, Spanish.
- * The chosen locale is persisted in localStorage under "AI-Powered-Music-locale".
+ * The chosen locale is persisted in localStorage under "AI-Music-locale".
  *
  * Usage in components:
  *   import { useI18n } from 'vue-i18n'
@@ -21,7 +21,7 @@ import fr from './locales/fr.json'
 export type Locale = 'en' | 'fr' | 'es'
 
 const SUPPORTED: Locale[] = ['en', 'fr', 'es']
-const STORAGE_KEY = 'ai-powered-music-locale'
+const STORAGE_KEY = 'ai-music-locale'
 
 function getInitialLocale(): Locale {
   const stored = localStorage.getItem(STORAGE_KEY) as Locale | null

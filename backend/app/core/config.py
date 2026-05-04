@@ -34,6 +34,8 @@ class AppConfig:
         ADMIN_PASSWORD: Password for the auto-created admin account.
         ACCESS_TOKEN_EXPIRE_MINUTES: JWT token lifetime in minutes.
         ANTHROPIC_API_KEY: Anthropic API key for Claude AI features (empty disables them).
+        ACESTEP_URL: URL of the ACE-Step 1.5 music generation microservice.
+        ACESTEP_MODEL_SIZE: DiT model size — "2b" or "4b".
     """
 
     HOST: str = os.getenv("API_HOST", "0.0.0.0")
@@ -77,3 +79,9 @@ class AppConfig:
 
     #: Anthropic API key — required for /api/ai/* endpoints.  Empty string disables AI features.
     ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "")
+
+    #: Internal URL of the ACE-Step 1.5 music generation microservice.
+    ACESTEP_URL: str = os.getenv("ACESTEP_URL", "http://acestep:8001")
+
+    #: ACE-Step DiT model size — "2b" (standard) or "4b" (XL).
+    ACESTEP_MODEL_SIZE: str = os.getenv("ACESTEP_MODEL_SIZE", "2b")

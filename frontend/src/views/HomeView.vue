@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * HomeView.vue - Landing page for AI-Powered-Music.
+ * HomeView.vue - Landing page for AI-Music.
  *
  * Displays feature highlight cards and a prominent call-to-action button
  * linking to the Download page. Admin-only cards are filtered by role.

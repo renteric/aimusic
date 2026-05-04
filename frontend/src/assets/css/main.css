@@ -1,5 +1,5 @@
 /**
- * main.css - Custom styles for AI-Powered-Music.
+ * main.css - Custom styles for AI-Music.
  *
  * Loaded after Bootstrap so every rule here can safely override Bootstrap
  * defaults. Keep this file focused on project-specific styles only.
@@ -648,4 +648,16 @@ tr {
 .blk-dark {
   background: #2d3748;
   color: #e2e8f0;
+}
+
+/* ── AI Composer ─────────────────────────────────────────────────────────────── */
+
+.music-player-audio {
+  border-radius: 0.375rem;
+}
+
+/* ── Utility ──────────────────────────────────────────────────────────────────── */
+
+.select-auto-width {
+  width: auto;
 }

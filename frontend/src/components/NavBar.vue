@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * NavBar.vue - Top navigation bar for AI-Powered-Music.
+ * NavBar.vue - Top navigation bar for AI-Music.
  *
  * Displays the app brand, navigation links (including the Stem Extraction
  * dropdown for admin/superadmin users), a language switcher, and a logout button.
@@ -85,6 +85,11 @@ async function handleLogout(): Promise<void> {
           <li v-if="!auth.isViewer" class="nav-item">
             <RouterLink class="nav-link" to="/melody">
               <i class="bi bi-music-note-list me-1"></i>{{ t('nav.melody') }}
+            </RouterLink>
+          </li>
+          <li v-if="!auth.isViewer" class="nav-item">
+            <RouterLink class="nav-link" to="/music">
+              <i class="bi bi-stars me-1"></i>{{ t('nav.ai_composer') }}
             </RouterLink>
           </li>
           <li class="nav-item">

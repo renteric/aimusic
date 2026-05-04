@@ -61,6 +61,7 @@ def create_app() -> FastAPI:
     from .api.download import router as download_router
     from .api.media import router as media_router
     from .api.melody import router as melody_router
+    from .api.music import router as music_router
     from .api.stem import router as stem_router
 
     app.include_router(auth_router)
@@ -71,6 +72,7 @@ def create_app() -> FastAPI:
     app.include_router(stem_router)
     app.include_router(ai_router)
     app.include_router(melody_router)
+    app.include_router(music_router)
 
     # ── Config endpoint ────────────────────────────────────────────────────────
     from .services.constants import SUPPORTED_FORMATS

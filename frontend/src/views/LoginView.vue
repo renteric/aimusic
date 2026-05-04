@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * LoginView.vue - Login page for AI-Powered-Music.
+ * LoginView.vue - Login page for AI-Music.
  *
  * Submits credentials to the auth store, which calls POST /api/auth/login.
  * On success, the user is navigated to the home page. Errors are displayed

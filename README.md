@@ -57,7 +57,7 @@ The UI ships in three languages selectable at any time from the NavBar dropdown 
 | `fr` | Français |
 | `es` | Español |
 
-The choice is persisted in `localStorage` (`ai-powered-music-locale`) and applied on every subsequent visit.
+The choice is persisted in `localStorage` (`ai-music-locale`) and applied on every subsequent visit.
 On first visit the browser's preferred language is used if supported, otherwise English.
 
 Locale files live in `frontend/src/i18n/locales/` — one JSON file per language.

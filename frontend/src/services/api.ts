@@ -167,6 +167,31 @@ export const adminApi = {
 // ── Stem Extraction ───────────────────────────────────────────────────────────
 
 import type {
+  MusicGeneratePayload,
+  MusicGenerateResponse,
+  MusicJobSummary,
+} from './types'
+
+// ── AI Composer (ACE-Step music generation) ───────────────────────────────────
+
+export const musicApi = {
+  /** Start a music generation job. Always returns a job_id for SSE streaming. */
+  generate: (payload: MusicGeneratePayload) =>
+    http.post<MusicGenerateResponse>('/music/generate', payload),
+
+  /** List all in-memory music generation jobs (newest first). */
+  listJobs: () => http.get<MusicJobSummary[]>('/music/jobs'),
+
+  /** Remove a completed music job record. */
+  removeJob: (jobId: string) =>
+    http.delete<{ success: boolean }>(`/music/jobs/${jobId}`),
+
+  /** Cancel a running music job. */
+  cancelJob: (jobId: string) =>
+    http.post<{ success: boolean }>(`/music/jobs/${jobId}/cancel`, {}),
+}
+
+import type {
   StemBounceRequest,
   StemBounceResponse,
   StemFolderResponse,
@@ -197,11 +222,12 @@ export const stemApi = {
   },
 
   /** Start a LALAL.AI separation job. */
-  separateLalai: (file: File, stems?: string[]) => {
+  separateLalai: (file: File, stems?: string[], format?: string) => {
     const form = new FormData()
     form.append('file', file)
     const params = new URLSearchParams()
     if (stems?.length) params.set('stems', stems.join(','))
+    if (format) params.set('output_format', format)
     const qs = params.toString() ? `?${params}` : ''
     return http.post<StemStartResponse>(`/stem/lalai/separate${qs}`, form, {
       headers: { 'Content-Type': 'multipart/form-data' },
@@ -209,11 +235,13 @@ export const stemApi = {
   },
 
   /** Start an AudioSep separation job. */
-  separateAudiosep: (file: File, stems?: string[]) => {
+  separateAudiosep: (file: File, stems?: string[], format?: string, bitrate?: number) => {
     const form = new FormData()
     form.append('file', file)
     const params = new URLSearchParams()
     if (stems?.length) params.set('stems', stems.join(','))
+    if (format) params.set('output_format', format)
+    if (bitrate) params.set('bitrate', String(bitrate))
     const qs = params.toString() ? `?${params}` : ''
     return http.post<StemStartResponse>(`/stem/audiosep/separate${qs}`, form, {
       headers: { 'Content-Type': 'multipart/form-data' },

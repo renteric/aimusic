@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * ProfileView.vue - Logged-in user profile page for AI-Powered-Music.
+ * ProfileView.vue - Logged-in user profile page for AI-Music.
  *
  * Shows the current user's account information and allows changing
  * their own password.

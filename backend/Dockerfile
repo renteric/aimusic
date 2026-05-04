@@ -1,30 +1,24 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # AI-Music — Backend API Image
-# Base: python:3.13-slim (Debian Bookworm slim)
+# Base: ai-music-py313:latest (ffmpeg, libsndfile1, gosu, curl, ca-certs)
 #
 # Layer order: system deps → Python deps → source code
 # This maximises Docker cache hits: source-only changes skip the pip layer.
 # ─────────────────────────────────────────────────────────────────────────────
 
-FROM python:3.13-slim
+FROM ai-music-py313:latest
 
 ARG USER_UID=1000
 ARG USER_GID=1000
 ARG USER_NAME=rik
 
-# ── System dependencies ───────────────────────────────────────────────────────
-# ffmpeg                 : audio conversion (required by yt-dlp)
+# ── Backend-specific system deps ──────────────────────────────────────────────
 # libimage-exiftool-perl : metadata reading/writing (used by metadata_cleaner)
-# gosu                   : drop from root to app user in entrypoint
 # nodejs                 : required by yt-dlp for YouTube JS extraction
-# libsndfile1            : audio I/O backend for soundfile / librosa (melody extraction)
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        ffmpeg \
         libimage-exiftool-perl \
-        gosu \
         nodejs \
-        libsndfile1 \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -33,8 +27,7 @@ WORKDIR /app
 # ── Python dependencies ───────────────────────────────────────────────────────
 # Copy only requirements first to leverage Docker layer caching.
 COPY requirements.txt .
-RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
 # ── Application source ────────────────────────────────────────────────────────
 COPY app/ ./app/

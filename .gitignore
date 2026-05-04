@@ -43,12 +43,12 @@ media/
 # ── yt-dlp cache ─────────────────────────────────────────────────────────────
 .cache/
 
-data/app.db
+data
 frontend/node_modules
 node_modules
 docs/*
 separator/docs/*
-separator/models/*
+models
 separator/outputs/*
 separator/uploads/*
 separator/files/*

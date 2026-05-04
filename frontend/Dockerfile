@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# AI-Powered-Music — Frontend Image (multi-stage)
+# AI-Music — Frontend Image (multi-stage)
 #
 # Stage 1: Build the Vue.js SPA with Vite
 # Stage 2: Serve the built assets with nginx

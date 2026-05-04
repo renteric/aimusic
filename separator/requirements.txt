@@ -16,9 +16,8 @@ python-multipart>=0.0.6
 aiofiles>=23.0.0
 httpx>=0.27.0
 
-# AudioSep — install separately from GitHub (not on PyPI):
-# pip install git+https://github.com/Audio-AGI/AudioSep.git
-# Checkpoint (~1 GB) auto-downloads to models/audiosep/ on first run.
+# AudioSep Python source is cloned from GitHub in the Dockerfile builder stage.
+# The checkpoint (~1 GB) is bind-mounted from ./models/separator/audiosep/ — run `make download-separator`.
 
 # Utilities
 tqdm>=4.66.0

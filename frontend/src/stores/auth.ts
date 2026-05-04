@@ -1,5 +1,5 @@
 /**
- * auth.ts - Pinia authentication store for AI-Powered-Music.
+ * auth.ts - Pinia authentication store for AI-Music.
  *
  * Manages the logged-in user state including role. Views and the router
  * navigation guard read `isAuthenticated` and role helpers to decide whether

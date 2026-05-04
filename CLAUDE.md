@@ -213,7 +213,7 @@ aimusic/
       is never bundled, keeping the bundle smaller and satisfying the strict CSP.
     - Never use ASCII apostrophes (`'`) in locale strings — they are escape characters
       in the vue-i18n message syntax. Use the typographic right single quote `'` (U+2019).
-    - Language choice is persisted to `localStorage` under key `ai-powered-music-locale`.
+    - Language choice is persisted to `localStorage` under key `ai-music-locale`.
     - Browser language is auto-detected on first visit; falls back to `en`.
 
 ---

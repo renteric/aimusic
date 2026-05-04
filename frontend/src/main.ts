@@ -1,5 +1,5 @@
 /**
- * main.ts - Application entry point for AI-Powered-Music.
+ * main.ts - Application entry point for AI-Music.
  *
  * Initialises Vue 3 with Pinia (state management) and Vue Router,
  * loads Bootstrap CSS, and mounts the root App component.

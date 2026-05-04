@@ -1,5 +1,5 @@
 /**
- * vite.config.ts - Vite build configuration for AI-Powered-Music frontend.
+ * vite.config.ts - Vite build configuration for AI-Music frontend.
  *
  * In development the Vite dev server proxies all /api/ requests to the
  * backend on port 5000, so both can run simultaneously without CORS issues.

@@ -49,9 +49,9 @@ docker exec -it music-frontend /bin/sh
 ## Check image sizes
 
 ```bash
-docker images ai-powered-music-backend
-docker images ai-powered-music-frontend
-docker history ai-powered-music-backend --no-trunc
+docker images ai-music-backend
+docker images ai-music-frontend
+docker history ai-music-backend --no-trunc
 ```
 
 ## Inspect what is in the backend image
@@ -80,4 +80,4 @@ docker compose run --rm backend find /app -maxdepth 4 -not -path "*/site-package
 - Clean apt lists in same layer.
 - Frontend: multi-stage build — only the compiled `dist/` goes into the nginx image.
 - Exclude `.venv/`, `media/`, `.git/`, `node_modules/`, `frontend/dist/` in `.dockerignore`.
-- Use `dive` to inspect layer sizes: `dive ai-powered-music-backend`.
+- Use `dive` to inspect layer sizes: `dive ai-music-backend`.

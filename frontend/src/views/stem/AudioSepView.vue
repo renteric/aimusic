@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * AudioSepView.vue - AudioSep text-guided stem separation page for AI-Powered-Music.
+ * AudioSepView.vue - AudioSep text-guided stem separation page for AI-Music.
  *
  * Allows admins to upload an audio file and select one or more predefined stems.
  * Each stem maps to a natural-language prompt sent to the AudioSep model, which
@@ -37,6 +37,8 @@ const stemDefs = computed(() =>
 // ── State ─────────────────────────────────────────────────────────────────────
 
 const selectedStems = ref<string[]>(['vocals'])
+const outputFormat = ref<'wav' | 'flac' | 'mp3'>('wav')
+const mp3Bitrate = ref<128 | 192 | 256 | 320>(320)
 
 const selectedFile = ref<File | null>(null)
 const isDragging = ref(false)
@@ -102,7 +104,12 @@ async function submit() {
   stopPoll()
 
   try {
-    const { data } = await stemApi.separateAudiosep(selectedFile.value, selectedStems.value)
+    const { data } = await stemApi.separateAudiosep(
+      selectedFile.value,
+      selectedStems.value,
+      outputFormat.value,
+      outputFormat.value === 'mp3' ? mp3Bitrate.value : undefined,
+    )
     startPoll(data.job_id)
   } catch (err: any) {
     jobError.value = err.response?.data?.detail ?? 'Failed to start job.'
@@ -237,6 +244,32 @@ function streamUrl(relPath: string): string {
         <div v-if="selectedStems.length > 0" class="text-muted small mt-2">
           <span class="fw-semibold">{{ t('stem.audiosep_prompts_label') }}</span>
           {{ AUDIOSEP_STEMS.filter(s => selectedStems.includes(s.id)).map(s => `"${s.prompt}"`).join(' · ') }}
+        </div>
+      </div>
+    </div>
+
+    <!-- Output format card -->
+    <div class="card mb-3">
+      <div class="card-body">
+        <h5 class="card-title mb-3">🎚️ {{ t('stem.output_format_label') }}</h5>
+        <div class="row g-2 align-items-end">
+          <div class="col-auto">
+            <label class="form-label small text-muted mb-1">{{ t('stem.output_format_label') }}</label>
+            <select v-model="outputFormat" class="form-select form-select-sm select-auto-width">
+              <option value="wav">WAV</option>
+              <option value="flac">FLAC</option>
+              <option value="mp3">MP3</option>
+            </select>
+          </div>
+          <div v-if="outputFormat === 'mp3'" class="col-auto">
+            <label class="form-label small text-muted mb-1">{{ t('stem.bitrate_label') }}</label>
+            <select v-model="mp3Bitrate" class="form-select form-select-sm select-auto-width">
+              <option :value="320">320 kbps</option>
+              <option :value="256">256 kbps</option>
+              <option :value="192">192 kbps</option>
+              <option :value="128">128 kbps</option>
+            </select>
+          </div>
         </div>
       </div>
     </div>

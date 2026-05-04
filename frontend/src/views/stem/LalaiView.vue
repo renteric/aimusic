@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * LalaiView.vue - LALAL.AI cloud stem separation page for AI-Powered-Music.
+ * LalaiView.vue - LALAL.AI cloud stem separation page for AI-Music.
  *
  * Allows admins to upload an audio file, select stems to extract via the
  * LALAL.AI cloud API, track job progress, and download the results.
@@ -30,6 +30,7 @@ const LALAI_STEMS = [
 ]
 
 const selectedStems = ref<string[]>(['vocals', 'drums'])
+const outputFormat = ref<'mp3' | 'wav'>('mp3')
 
 const selectedFile = ref<File | null>(null)
 const isDragging = ref(false)
@@ -99,7 +100,7 @@ async function submit() {
   stopPoll()
 
   try {
-    const { data } = await stemApi.separateLalai(selectedFile.value, selectedStems.value)
+    const { data } = await stemApi.separateLalai(selectedFile.value, selectedStems.value, outputFormat.value)
     startPoll(data.job_id)
   } catch (err: any) {
     jobError.value = err.response?.data?.detail ?? 'Failed to start job.'
@@ -228,6 +229,20 @@ function streamUrl(relPath: string): string {
         </div>
         <div v-if="selectedStems.length === 0" class="text-danger small mt-2">
           {{ t('stem.select_stem_required') }}
+        </div>
+      </div>
+    </div>
+
+    <!-- Output format card -->
+    <div class="card mb-3">
+      <div class="card-body">
+        <h5 class="card-title mb-3">🎚️ {{ t('stem.output_format_label') }}</h5>
+        <div class="col-auto">
+          <label class="form-label small text-muted mb-1">{{ t('stem.output_format_label') }}</label>
+          <select v-model="outputFormat" class="form-select form-select-sm select-auto-width">
+            <option value="mp3">MP3</option>
+            <option value="wav">WAV</option>
+          </select>
         </div>
       </div>
     </div>

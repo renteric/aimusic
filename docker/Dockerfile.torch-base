@@ -1,0 +1,19 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# AI-Music — PyTorch 2.6.0 CPU shared base image
+# Tagged: aimusic-py313-torch:latest
+#
+# Extends aimusic-py313 with pinned CPU-only PyTorch wheels (~300 MB).
+# Used as the builder stage for: separator, transcribe.
+# Build with `make build-bases` before building service images.
+# ─────────────────────────────────────────────────────────────────────────────
+
+FROM ai-music-py313:latest
+
+# CPU-only wheels — avoids CUDA toolkit bloat (~2 GB saved vs default index).
+# All three pinned together: same PyTorch release, same CPU index, matching ABIs.
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install \
+        torch==2.6.0+cpu \
+        torchaudio==2.6.0+cpu \
+        torchvision==0.21.0+cpu \
+        --index-url https://download.pytorch.org/whl/cpu

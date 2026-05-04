@@ -38,6 +38,7 @@ from ..core.auth import get_current_user
 from ..core.config import AppConfig
 from ..models.user import User
 from ..services.downloader_cli import ui_resolve_output_dir
+from ..utils.sse import SSE_JOB_DONE, sse_pack
 
 router = APIRouter(prefix="/api/download", tags=["download"])
 
@@ -250,7 +251,7 @@ def _run_job(job: DownloadJob) -> None:
     Streams stdout/stderr lines into *job.q* for SSE delivery.  When the
     download succeeds and post-processing flags are set, calls
     :func:`_post_process` on every newly downloaded audio file before
-    enqueuing the ``"__JOB_DONE__"`` sentinel.
+    enqueuing the :data:`~app.utils.sse.SSE_JOB_DONE` sentinel.
 
     Args:
         job: The :class:`DownloadJob` to execute.
@@ -291,7 +292,7 @@ def _run_job(job: DownloadJob) -> None:
         job.error = str(exc)
     finally:
         job.done = True
-        job.q.put("__JOB_DONE__")
+        job.q.put(SSE_JOB_DONE)
         _jobs_cleanup()
 
 
@@ -421,12 +422,6 @@ async def stream_logs(
     if job is None:
         raise HTTPException(404, "Job not found.")
 
-    def sse_pack(data: str, event: str | None = None) -> str:
-        """Format *data* as an SSE message block."""
-        payload = "".join(f"data: {line}\n" for line in data.splitlines()) or "data: \n"
-        prefix = f"event: {event}\n" if event else ""
-        return prefix + payload + "\n"
-
     async def generate():
         """Yield SSE chunks until the job completes."""
         yield "data: connected\n\n"
@@ -442,7 +437,7 @@ async def stream_logs(
                     break
                 yield ": keep-alive\n\n"
                 continue
-            if line == "__JOB_DONE__":
+            if line == SSE_JOB_DONE:
                 break
             yield sse_pack(line.rstrip("\n"))
 

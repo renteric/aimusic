@@ -70,6 +70,6 @@ Then provide the corrected Dockerfile snippet.
 If the backend image is significantly larger, investigate with:
 
 ```bash
-docker history ai-powered-music-backend --no-trunc
-dive ai-powered-music-backend   # if dive is installed
+docker history ai-music-backend --no-trunc
+dive ai-music-backend   # if dive is installed
 ```

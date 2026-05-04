@@ -6,6 +6,6 @@
 # off to gunicorn via gosu.
 set -e
 
-chown -R "${APP_USER}:${APP_USER}" /app/data /app/media /app/docs 2>/dev/null || true
+chown "${APP_USER}:${APP_USER}" /app/data /app/media /app/docs 2>/dev/null || true
 
 exec gosu "${APP_USER}" "$@"

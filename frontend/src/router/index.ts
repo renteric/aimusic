@@ -1,5 +1,5 @@
 /**
- * router/index.ts - Vue Router configuration for AI-Powered-Music.
+ * router/index.ts - Vue Router configuration for AI-Music.
  *
  * Uses HTML5 history mode (no hash in URLs). A global navigation guard checks
  * authentication state before every route change: unauthenticated users are
@@ -47,6 +47,11 @@ const routes: RouteRecordRaw[] = [
     path: '/melody',
     name: 'Melody',
     component: () => import('@/views/MelodyView.vue'),
+  },
+  {
+    path: '/music',
+    name: 'Music',
+    component: () => import('@/views/MusicView.vue'),
   },
   {
     path: '/queue',

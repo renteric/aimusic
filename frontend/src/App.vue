@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * App.vue - Root component for AI-Powered-Music.
+ * App.vue - Root component for AI-Music.
  *
  * Renders NavBar for authenticated users and the router-view outlet.
  * The navigation guard in router/index.ts handles redirecting unauthenticated

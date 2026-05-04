@@ -13,6 +13,7 @@ Prerequisites:
 """
 
 import logging
+import subprocess
 import time
 from pathlib import Path
 from typing import Callable, Dict, List, Optional
@@ -239,29 +240,62 @@ class LalaiSeparator:
 
     # ── Public API ────────────────────────────────────────────────────────────
 
+    def _convert_to_wav(self, mp3_path: Path, wav_path: Path) -> None:
+        """
+        Convert an MP3 file to WAV using FFmpeg.
+
+        Args:
+            mp3_path: Source MP3 file downloaded from LALAL.AI CDN.
+            wav_path: Destination WAV path.
+
+        Raises:
+            LalaiError: If FFmpeg is not on PATH or conversion fails.
+        """
+        logger.debug("Converting %s → %s", mp3_path.name, wav_path.name)
+        cmd = [
+            "ffmpeg", "-y",
+            "-i", str(mp3_path),
+            "-ar", "44100",
+            "-ac", "2",
+            str(wav_path),
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            logger.error("FFmpeg WAV conversion failed:\n%s", result.stderr)
+            raise LalaiError(f"FFmpeg conversion to WAV failed: {result.stderr[-300:]}")
+        mp3_path.unlink(missing_ok=True)
+        logger.debug("WAV conversion complete: %s", wav_path.name)
+
     def separate(
         self,
         input_path: Path,
         output_dir: Path,
         stems: List[str],
         progress_callback: Optional[Callable[[int, str], None]] = None,
+        output_format: str = "mp3",
     ) -> Dict[str, Path]:
         """
         Separate *input_path* into the requested stems using LALAL.AI v1.
+
+        LALAL.AI always returns MP3 from its CDN.  When *output_format* is
+        ``"wav"`` the downloaded MP3 is converted to WAV via FFmpeg and the
+        intermediate MP3 is deleted.
 
         Args:
             input_path:        Source audio file.
             output_dir:        Directory for downloaded stem files.
             stems:             Stem IDs to extract (must be in STEM_TO_LALAI).
             progress_callback: Optional ``(pct: int, msg: str)`` callback.
+            output_format:     ``"mp3"`` (default) or ``"wav"``.
 
         Returns:
             Mapping of stem_id → Path for every successfully downloaded stem.
         """
+        fmt = output_format if output_format in {"mp3", "wav"} else "mp3"
         output_dir.mkdir(parents=True, exist_ok=True)
         results: Dict[str, Path] = {}
 
-        logger.info("separate() stems=%s input=%s", stems, input_path.name)
+        logger.info("separate() stems=%s input=%s format=%s", stems, input_path.name, fmt)
 
         if progress_callback:
             progress_callback(2, "📤 Uploading to LALAL.AI…")
@@ -290,7 +324,6 @@ class LalaiSeparator:
                 logger.error("Failed to process stem '%s': %s", stem_id, exc)
                 continue
 
-            # Find the stem track URL (type == "stem", not "back")
             stem_url = next(
                 (t["url"] for t in task_result.get("tracks", []) if t.get("type") == "stem"),
                 None,
@@ -299,14 +332,24 @@ class LalaiSeparator:
                 logger.warning("No stem track URL for '%s': %s", stem_id, task_result)
                 continue
 
-            dest = output_dir / f"{stem_id}.mp3"
+            # Always download as MP3 (LALAL.AI CDN only serves MP3)
+            mp3_dest = output_dir / f"{stem_id}.mp3"
             try:
-                self._download(stem_url, dest)
+                self._download(stem_url, mp3_dest)
             except LalaiError as exc:
                 logger.error("Download failed for '%s': %s", stem_id, exc)
                 continue
 
-            results[stem_id] = dest
+            if fmt == "wav":
+                wav_dest = output_dir / f"{stem_id}.wav"
+                try:
+                    self._convert_to_wav(mp3_dest, wav_dest)
+                    results[stem_id] = wav_dest
+                except LalaiError as exc:
+                    logger.error("WAV conversion failed for '%s': %s", stem_id, exc)
+                    results[stem_id] = mp3_dest  # fall back to MP3
+            else:
+                results[stem_id] = mp3_dest
 
             done_pct = int(10 + ((idx + 1) / total) * 80)
             if progress_callback:

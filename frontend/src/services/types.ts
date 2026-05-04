@@ -1,5 +1,5 @@
 /**
- * types.ts - Shared TypeScript interfaces for the AI-Powered-Music API.
+ * types.ts - Shared TypeScript interfaces for the AI-Music API.
  *
  * These types mirror the JSON shapes returned by the Flask backend.
  * All API service functions use these types for request/response typing.
@@ -354,6 +354,48 @@ export interface MelodyJob {
 export interface MelodyExtractResponse {
   job_id: string
   status: MelodyJobStatus
+}
+
+// ── AI Composer (ACE-Step music generation) ───────────────────────────────────
+
+/** Payload for POST /api/music/generate */
+export interface MusicGeneratePayload {
+  prompt: string
+  lyrics?: string
+  duration?: number
+  infer_steps?: number
+  guidance_scale?: number
+  title?: string
+}
+
+/** Response from POST /api/music/generate */
+export interface MusicGenerateResponse {
+  success: boolean
+  job_id: string
+  error?: string
+}
+
+/** SSE done-event payload from GET /api/music/jobs/{id}/stream */
+export interface MusicJobDoneEvent {
+  success: boolean
+  message: string
+  error: string
+  job_id: string
+  /** Media-relative path of the saved audio file; empty on failure. */
+  rel_path: string
+}
+
+/** A music generation job summary from GET /api/music/jobs */
+export interface MusicJobSummary {
+  job_id: string
+  done: boolean
+  success: boolean | null
+  message: string
+  error: string
+  started_at: number
+  prompt: string
+  duration: number
+  output_rel_path: string
 }
 
 // ── AI Intelligence Layer ─────────────────────────────────────────────────────

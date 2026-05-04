@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * StemLibraryView.vue - Stem Extraction Library page for AI-Powered-Music.
+ * StemLibraryView.vue - Stem Extraction Library page for AI-Music.
  *
  * Browses and manages extracted stem output folders stored in media/stems/.
  * Shows all output folders with their file counts, lets users expand a folder

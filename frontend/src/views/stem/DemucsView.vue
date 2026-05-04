@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * DemucsView.vue - Demucs stem separation page for AI-Powered-Music.
+ * DemucsView.vue - Demucs stem separation page for AI-Music.
  *
  * Allows admins to upload an audio file, select a Demucs model and stems,
  * start a separation job, track progress, and download extracted stems.

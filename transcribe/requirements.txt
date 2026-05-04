@@ -1,7 +1,6 @@
-# Extra dependencies for the Whisper transcription container
-# Install with: pip install -r requirements.txt -r requirements.transcribe.txt
+# Whisper transcription service dependencies.
+# torch 2.6.0+cpu is provided by the aimusic-py313-torch base image — do not list it here.
 openai-whisper
-torch
 fastapi>=0.115.0
 uvicorn[standard]>=0.34.0
 python-dotenv>=1.0.0
