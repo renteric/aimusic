@@ -52,3 +52,4 @@ models
 separator/outputs/*
 separator/uploads/*
 separator/files/*
+settings.local.json
